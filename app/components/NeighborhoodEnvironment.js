@@ -1,12 +1,13 @@
 import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
 
 export default function NeighborhoodEnvironment({ hasEnteredNeighborhood, setHasEnteredNeighborhood }) {
   const containerRef = useRef(null);
   const animationRef = useRef(null);
   const startTimeRef = useRef(null);
   const cameraRef = useRef(null);
-  const cubeRef = useRef(null);
+  const playerRef = useRef(null);
   const keysRef = useRef({
     w: false,
     a: false,
@@ -38,7 +39,7 @@ export default function NeighborhoodEnvironment({ hasEnteredNeighborhood, setHas
     cameraRef.current = camera;
     camera.position.copy(cameraSettings.start.position);
 
-    // Create a container for the camera and cube
+    // Create a container for the camera and player
     const container = new THREE.Object3D();
     scene.add(container);
     container.add(camera);
@@ -162,20 +163,24 @@ export default function NeighborhoodEnvironment({ hasEnteredNeighborhood, setHas
     plane.position.y = 0;
     scene.add(plane);
 
-    // Create cube
-    const cube = new THREE.Mesh(
-      new THREE.BoxGeometry(1, 2, 1),
-      [
-        new THREE.MeshBasicMaterial({ color: 0x59C4F6 }), // right
-        new THREE.MeshBasicMaterial({ color: 0x4A90E2 }), // left
-        new THREE.MeshBasicMaterial({ color: 0x357ABD }), // top
-        new THREE.MeshBasicMaterial({ color: 0x2D6DA3 }), // bottom
-        new THREE.MeshBasicMaterial({ color: 0x1E4B7A }), // front
-        new THREE.MeshBasicMaterial({ color: 0x0F2D4D })  // back
-      ]
+    // Load player model
+    const loader = new GLTFLoader();
+    loader.setPath('/models/');
+    
+    let playerModel = null;
+    loader.load(
+      'player.glb',
+      (gltf) => {
+        playerModel = gltf.scene;
+        playerModel.scale.set(1, 1, 1);
+        container.add(playerModel);
+        playerRef.current = playerModel;
+      },
+      undefined,
+      (error) => {
+        console.error('An error occurred while loading the model:', error);
+      }
     );
-    cubeRef.current = cube;
-    container.add(cube);
 
     // Position container to start at ground level
     container.position.y = 1; // Half the height of the cube (2/2) to place it on ground
@@ -280,7 +285,7 @@ export default function NeighborhoodEnvironment({ hasEnteredNeighborhood, setHas
 
       if (hasEnteredNeighborhood) {
         // Update container position and rotation based on keys
-        if (cubeRef.current) {
+        if (playerRef.current) {
           const { moveSpeed, sprintSpeed, rotationSpeed, gravity } = movementSettings;
           const cameraOffset = cameraSettings.end.offset;
           
@@ -344,8 +349,9 @@ export default function NeighborhoodEnvironment({ hasEnteredNeighborhood, setHas
         }
       } else {
         // Reset cube and camera positions when exiting
-        if (cubeRef.current) {
-          cubeRef.current.position.set(0, 0, 0);
+
+        if (playerRef.current) {
+          playerRef.current.position.set(0, 0, 0);
         }
         const currentPosition = new THREE.Vector3();
         currentPosition.lerpVectors(cameraSettings.end.position, cameraSettings.start.position, eased);
@@ -381,10 +387,19 @@ export default function NeighborhoodEnvironment({ hasEnteredNeighborhood, setHas
       if (containerRef.current && renderer.domElement) {
         containerRef.current.removeChild(renderer.domElement);
       }
-      scene.remove(cube);
+      if (playerModel) {
+        playerModel.traverse((child) => {
+          if (child.isMesh) {
+            child.geometry.dispose();
+            if (Array.isArray(child.material)) {
+              child.material.forEach(material => material.dispose());
+            } else {
+              child.material.dispose();
+            }
+          }
+        });
+      }
       scene.remove(plane);
-      cube.geometry.dispose();
-      cube.material.forEach(material => material.dispose());
       plane.geometry.dispose();
       plane.material.dispose();
       renderer.dispose();
