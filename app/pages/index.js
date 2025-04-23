@@ -54,7 +54,7 @@ export default function Home() {
 
         {!hasEnteredNeighborhood &&
         <div style={{display: "flex", flexDirection: "column", gap: 16}}>
-          <img style={{width: 250, imageRendering: "pixelated"}} src="./HackClubSF.png"/>
+          <img style={{width: 250, imageRendering: "pixelated"}} src="./neighborhoodLogo.png"/>
           {menuItems.map((item) => (
             <div 
               key={item.id}

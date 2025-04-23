@@ -1,6 +1,38 @@
 import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
+import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader';
+import { MTLLoader } from 'three/examples/jsm/loaders/MTLLoader';
+
+// Function to create a toon gradient texture
+function createToonGradient() {
+  const canvas = document.createElement('canvas');
+  canvas.width = 4;
+  canvas.height = 1;
+  const context = canvas.getContext('2d');
+  
+  // Create gradient
+  const gradient = context.createLinearGradient(0, 0, canvas.width, 0);
+  gradient.addColorStop(0.0, '#444444');
+  gradient.addColorStop(0.33, '#888888');
+  gradient.addColorStop(0.66, '#cccccc');
+  gradient.addColorStop(1.0, '#ffffff');
+  
+  // Fill with gradient
+  context.fillStyle = gradient;
+  context.fillRect(0, 0, canvas.width, canvas.height);
+  
+  const texture = new THREE.CanvasTexture(
+    canvas,
+    THREE.UVMapping,
+    THREE.ClampToEdgeWrapping,
+    THREE.ClampToEdgeWrapping,
+    THREE.NearestFilter,
+    THREE.NearestFilter
+  );
+  texture.needsUpdate = true;
+  
+  return texture;
+}
 
 export default function NeighborhoodEnvironment({ hasEnteredNeighborhood, setHasEnteredNeighborhood }) {
   const containerRef = useRef(null);
@@ -24,14 +56,19 @@ export default function NeighborhoodEnvironment({ hasEnteredNeighborhood, setHas
     // Camera settings
     const cameraSettings = {
       start: {
-        position: new THREE.Vector3(2, 2, 2),
-        lookAt: new THREE.Vector3(0, 0, 0)
+        position: new THREE.Vector3(2, 2, 1), // Positioned to the right (+x) while staying close
+        lookAt: new THREE.Vector3(-0.5, 1.5, 0),  // Looking slightly left to keep character in frame
+        fov: 45 // Zoomed in FOV for close-up
       },
       end: {
-        position: new THREE.Vector3(0, 3, 5), // Position camera behind and above cube
-        offset: new THREE.Vector3(0, 2, 4) // Offset from cube for third-person view
+        position: new THREE.Vector3(0, 3, 6), // Centered position
+        offset: new THREE.Vector3(0, 3, 6),   // Matching offset
+        fov: 75 // Wider FOV for gameplay
       }
     };
+
+    // Add a lookAt target for gameplay that's ahead of the player
+    const gameplayLookAtOffset = new THREE.Vector3(0, 2, 8); // Look further ahead and up
 
     // Setup scene with Animal Crossing sky color
     const scene = new THREE.Scene();
@@ -41,19 +78,30 @@ export default function NeighborhoodEnvironment({ hasEnteredNeighborhood, setHas
     const fogColor = new THREE.Color(0x88d7ee);
     scene.fog = new THREE.Fog(fogColor, 20, 50); // Start fading at 20 units, complete fade by 50 units
     
-    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-    cameraRef.current = camera;
-    camera.position.copy(cameraSettings.start.position);
-
-    // Bright ambient lighting for Animal Crossing style
-    const ambientLight = new THREE.AmbientLight(0xffffff, 1.5);
-    scene.add(ambientLight);
-
     // Create a container for the camera and player
     const container = new THREE.Object3D();
     scene.add(container);
-    container.add(camera);
-    
+
+    // Set up camera - scene level, not attached to container
+    const camera = new THREE.PerspectiveCamera(cameraSettings.start.fov, window.innerWidth / window.innerHeight, 0.1, 1000);
+    cameraRef.current = camera;
+    camera.position.copy(cameraSettings.start.position);
+    scene.add(camera); // Add to scene, not container
+
+    // Enhanced lighting setup
+    const ambientLight = new THREE.AmbientLight(0xffffff, 1.0);
+    scene.add(ambientLight);
+
+    // Add directional light for better shadows and definition
+    const dirLight = new THREE.DirectionalLight(0xffffff, 1.0);
+    dirLight.position.set(5, 5, 5);
+    scene.add(dirLight);
+
+    // Add point light for additional illumination
+    const pointLight = new THREE.PointLight(0xffffff, 1.0);
+    pointLight.position.set(-5, 5, -5);
+    scene.add(pointLight);
+
     // Setup renderer with toon rendering settings
     const renderer = new THREE.WebGLRenderer({ 
       antialias: true,
@@ -93,27 +141,149 @@ export default function NeighborhoodEnvironment({ hasEnteredNeighborhood, setHas
     plane.position.y = 0;
     scene.add(plane);
 
-    // Load player model
-    const loader = new GLTFLoader();
-    loader.setPath('/models/');
+    // Load player model with materials
+    const mtlLoader = new MTLLoader();
+    const objLoader = new OBJLoader();
+    
+    mtlLoader.setPath('/models/');
+    objLoader.setPath('/models/');
     
     let playerModel = null;
-    loader.load(
-      'player.glb',
-      (gltf) => {
-        playerModel = gltf.scene;
-        playerModel.scale.set(1, 1, 1);
-        container.add(playerModel);
-        playerRef.current = playerModel;
+
+    // First load the materials
+    mtlLoader.load(
+      'model.mtl',
+      (materials) => {
+        materials.preload();
+        objLoader.setMaterials(materials);
+        
+        // Then load the object
+        objLoader.load(
+          '25_04_23_17_52_28_866.obj',
+          (obj) => {
+            playerModel = obj;
+            playerModel.scale.set(0.009, 0.009, 0.009);
+            playerModel.rotation.y = (Math.PI / 4) * -1; // Rotate 180 degrees to face backward
+
+            const textureLoader = new THREE.TextureLoader();
+            textureLoader.setPath('/models/');
+
+            // Function to load a set of textures for a given index
+            const loadTextureSet = async (index) => {
+              const textures = {
+                map: await new Promise(resolve => textureLoader.load(
+                  `model_${index}_color.png`,
+                  texture => {
+                    // Increase saturation while preserving colors
+                    const canvas = document.createElement('canvas');
+                    canvas.width = texture.image.width;
+                    canvas.height = texture.image.height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(texture.image, 0, 0);
+                    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                    const data = imageData.data;
+                    
+                    // Increase saturation while preserving colors
+                    for (let i = 0; i < data.length; i += 4) {
+                      const r = data[i];
+                      const g = data[i + 1];
+                      const b = data[i + 2];
+                      const max = Math.max(r, g, b);
+                      const min = Math.min(r, g, b);
+                      const l = (max + min) / 2;
+                      const s = max === min ? 0 : (max - min) / (max + min);
+                      const newS = Math.min(s * 2.0, 1); // Double the saturation
+                      const newMax = l + newS * l;
+                      const newMin = l - newS * l;
+                      
+                      data[i] = r === max ? newMax : r === min ? newMin : r;
+                      data[i + 1] = g === max ? newMax : g === min ? newMin : g;
+                      data[i + 2] = b === max ? newMax : b === min ? newMin : b;
+                    }
+                    
+                    ctx.putImageData(imageData, 0, 0);
+                    const newTexture = new THREE.Texture(canvas);
+                    newTexture.needsUpdate = true;
+                    resolve(newTexture);
+                  },
+                  undefined,
+                  () => resolve(null)
+                )),
+                normalMap: await new Promise(resolve => textureLoader.load(
+                  `model_${index}_normal.png`,
+                  texture => resolve(texture),
+                  undefined,
+                  () => resolve(null)
+                ))
+              };
+
+              return new THREE.MeshToonMaterial({
+                ...textures,
+                gradientMap: createToonGradient(),
+                side: THREE.DoubleSide,
+                shininess: 0
+                // Removed all emissive properties to prevent whitening
+              });
+            };
+
+            // Load all texture sets (0-11)
+            Promise.all(
+              Array.from({ length: 12 }, (_, i) => loadTextureSet(i))
+            ).then(materials => {
+              let meshIndex = 0;
+              playerModel.traverse((child) => {
+                if (child.isMesh) {
+                  // Apply the corresponding material to each mesh
+                  child.material = materials[meshIndex % materials.length];
+                  meshIndex++;
+                }
+              });
+            });
+
+            // Add model to scene
+            container.add(playerModel);
+            playerRef.current = playerModel;
+          },
+          (xhr) => {
+            console.log((xhr.loaded / xhr.total * 100) + '% loaded');
+          },
+          (error) => {
+            console.error('An error occurred while loading the model:', error);
+          }
+        );
       },
       undefined,
       (error) => {
-        console.error('An error occurred while loading the model:', error);
+        console.error('An error occurred while loading the materials:', error);
+        
+        // Fallback to basic material if MTL fails
+        objLoader.load(
+          '25_04_23_17_52_28_866.obj',
+          (obj) => {
+            playerModel = obj;
+            playerModel.scale.set(0.009, 0.009, 0.009);
+            playerModel.rotation.y = (Math.PI / 4) * -1; // Match the rotation in fallback case
+            
+            // Apply toon material for visibility
+            playerModel.traverse((child) => {
+              if (child.isMesh) {
+                child.material = new THREE.MeshToonMaterial({
+                  color: 0x4287f5,
+                  gradientMap: createToonGradient(),
+                  side: THREE.DoubleSide
+                });
+              }
+            });
+            
+            container.add(playerModel);
+            playerRef.current = playerModel;
+          }
+        );
       }
     );
 
     // Position container to start at ground level
-    container.position.y = 1; // Half the height of the cube (2/2) to place it on ground
+    container.position.y = 0; // Place directly on ground
 
     // Movement settings
     const movementSettings = {
@@ -161,11 +331,6 @@ export default function NeighborhoodEnvironment({ hasEnteredNeighborhood, setHas
         case 'escape':
           keysRef.current.escape = true;
           setHasEnteredNeighborhood(false);
-          // Reset position and rotation when exiting
-          if (container) {
-            container.position.set(0, 1, 0);
-            container.rotation.set(0, 0, 0);
-          }
           break;
       }
     };
@@ -219,6 +384,14 @@ export default function NeighborhoodEnvironment({ hasEnteredNeighborhood, setHas
           const { moveSpeed, sprintSpeed, rotationSpeed, gravity } = movementSettings;
           const cameraOffset = cameraSettings.end.offset;
           
+          // Interpolate FOV
+          camera.fov = THREE.MathUtils.lerp(
+            cameraSettings.start.fov,
+            cameraSettings.end.fov,
+            eased
+          );
+          camera.updateProjectionMatrix(); // Important: must call this after changing FOV
+
           // Handle rotation with A and D
           if (keysRef.current.a) {
             container.rotation.y += rotationSpeed;
@@ -228,7 +401,7 @@ export default function NeighborhoodEnvironment({ hasEnteredNeighborhood, setHas
           }
 
           // Calculate forward direction based on rotation
-          const forward = new THREE.Vector3(0, 0, -1);
+          const forward = new THREE.Vector3(0, 0, 1);
           forward.applyQuaternion(container.quaternion);
 
           // Handle forward/backward movement with W and S
@@ -246,8 +419,8 @@ export default function NeighborhoodEnvironment({ hasEnteredNeighborhood, setHas
             jumpState.jumpVelocity -= gravity;
             
             // Check if landed (accounting for cube height)
-            if (container.position.y <= jumpState.groundY + 1) { // Add 1 (half cube height) to keep feet on ground
-              container.position.y = jumpState.groundY + 1;
+            if (container.position.y <= jumpState.groundY) {
+              container.position.y = jumpState.groundY;
               jumpState.isJumping = false;
               jumpState.jumpVelocity = 0;
             }
@@ -255,38 +428,83 @@ export default function NeighborhoodEnvironment({ hasEnteredNeighborhood, setHas
 
           // Update camera position relative to container
           if (progress === 1) {
+            // Position camera behind player based on container's rotation
+            const cameraAngle = container.rotation.y;
+            const distance = 6;
+            const height = 3;
+            
+            // Position camera directly behind player
             camera.position.set(
-              cameraOffset.x,
-              cameraOffset.y,
-              cameraOffset.z
+              container.position.x - Math.sin(cameraAngle) * distance,
+              container.position.y + height,
+              container.position.z - Math.cos(cameraAngle) * distance
             );
-            camera.lookAt(container.position);
+            
+            // Look ahead of player
+            const lookAtTarget = new THREE.Vector3(
+              container.position.x + Math.sin(cameraAngle) * gameplayLookAtOffset.z,
+              container.position.y + gameplayLookAtOffset.y,
+              container.position.z + Math.cos(cameraAngle) * gameplayLookAtOffset.z
+            );
+            camera.lookAt(lookAtTarget);
           } else {
             // During transition
             const currentPosition = new THREE.Vector3();
             currentPosition.lerpVectors(
               cameraSettings.start.position,
               new THREE.Vector3(
-                cameraOffset.x,
-                cameraOffset.y,
-                cameraOffset.z
+                container.position.x - Math.sin(container.rotation.y) * 4,
+                container.position.y + 4, // Match the new height
+                container.position.z - Math.cos(container.rotation.y) * 4
               ),
               eased
             );
             camera.position.copy(currentPosition);
-            camera.lookAt(container.position);
+            
+            // Smoothly transition the look target
+            const startLookAt = cameraSettings.start.lookAt;
+            const endLookAt = new THREE.Vector3(
+              container.position.x,
+              container.position.y + 0.5, // Match the new look target
+              container.position.z
+            );
+            const currentLookAt = new THREE.Vector3();
+            currentLookAt.lerpVectors(startLookAt, endLookAt, eased);
+            camera.lookAt(currentLookAt);
           }
         }
       } else {
-        // Reset cube and camera positions when exiting
-
+        // Reset player and camera positions when exiting
         if (playerRef.current) {
           playerRef.current.position.set(0, 0, 0);
         }
+        
+        if (container) {
+          container.position.set(0, 0, 0);
+          container.rotation.set(0, 0, 0);
+        }
+        
+        // Transition camera back to starting position
         const currentPosition = new THREE.Vector3();
-        currentPosition.lerpVectors(cameraSettings.end.position, cameraSettings.start.position, eased);
+        currentPosition.lerpVectors(
+          new THREE.Vector3(
+            - Math.sin(container.rotation.y) * 4,
+            4, // Updated height
+            - Math.cos(container.rotation.y) * 4
+          ), 
+          cameraSettings.start.position, 
+          eased
+        );
         camera.position.copy(currentPosition);
-        camera.lookAt(new THREE.Vector3(-1.25, 0.5, 0));
+        
+        // Transition look target
+        const currentLookAt = new THREE.Vector3();
+        currentLookAt.lerpVectors(
+          new THREE.Vector3(0, 0.5, 0), // Updated target height
+          cameraSettings.start.lookAt, 
+          eased
+        );
+        camera.lookAt(currentLookAt);
       }
       
       renderer.render(scene, camera);
