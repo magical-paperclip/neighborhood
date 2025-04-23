@@ -1,0 +1,27 @@
+{
+  "name": "electron-nextjs-project",
+  "version": "0.1.0",
+  "private": true,
+  "main": "main/main.js",
+  "author": "ThomasStubblefield",
+  "description": "Hack Club Neighborhood App",
+  "scripts": {
+    "dev": "concurrently -n \"NEXT,ELECTRON\" -c \"yellow,blue\" --kill-others \"next dev\" \"electron .\"",
+    "build": "next build && electron-builder",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "@react-spring/three": "^9.7.5",
+    "electron-serve": "^2.1.1",
+    "next": "15.3.1",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "three": "^0.175.0"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2",
+    "electron": "^35.2.0",
+    "electron-builder": "^26.0.12"
+  }
+}
