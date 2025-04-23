@@ -24,7 +24,7 @@ export default function Home() {
       <div style={{display: 'flex', height: "100vh", flexDirection: "column", justifyContent: "center", alignItems: "center"}}>
         <video controls style={{width: 300}} src="https://hc-cdn.hel1.your-objectstorage.com/s/v3/90566630dd0e9f5b3cfb53d48cc32a1ad8daefb5_img_3248.mp4"/>
         <br/>
-        <i>"somewhere new" - adventurer</i>
+        <i>"somewhere new" - adventurer Paolo</i>
       </div>
     </>
   );
