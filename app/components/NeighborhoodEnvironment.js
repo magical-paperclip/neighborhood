@@ -32,24 +32,43 @@ export default function NeighborhoodEnvironment({ hasEnteredNeighborhood, setHas
       }
     };
 
-    // Setup scene
+    // Setup scene with Animal Crossing sky color
     const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x88d7ee); // Lighter blue like Animal Crossing
+    
+    // Add fog that matches sky color for smooth distance fading
+    const fogColor = new THREE.Color(0x88d7ee);
+    scene.fog = new THREE.Fog(fogColor, 20, 50); // Start fading at 20 units, complete fade by 50 units
+    
     const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
     cameraRef.current = camera;
     camera.position.copy(cameraSettings.start.position);
+
+    // Bright ambient lighting for Animal Crossing style
+    const ambientLight = new THREE.AmbientLight(0xffffff, 1.5);
+    scene.add(ambientLight);
+
+    // Add hemisphere light for better outdoor lighting
+    const hemisphereLight = new THREE.HemisphereLight(0xffffff, 0x8dc63f, 1);
+    scene.add(hemisphereLight);
+
+    // Subtle directional light for minimal shadows
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    directionalLight.position.set(5, 5, 5);
+    scene.add(directionalLight);
 
     // Create a container for the camera and cube
     const container = new THREE.Object3D();
     scene.add(container);
     container.add(camera);
     
-    // Setup renderer
+    // Setup renderer with toon rendering settings
     const renderer = new THREE.WebGLRenderer({ 
-      antialias: false, 
+      antialias: true,
       alpha: true,
       powerPreference: "low-power"
     });
-    renderer.setPixelRatio(0.5);
+    renderer.setPixelRatio(window.devicePixelRatio);
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setClearColor(0x000000, 0);
     
@@ -57,125 +76,59 @@ export default function NeighborhoodEnvironment({ hasEnteredNeighborhood, setHas
       containerRef.current.appendChild(renderer.domElement);
     }
 
-    // Create floor plane
-    const planeGeometry = new THREE.PlaneGeometry(100, 100);
+    // Create floor plane with Animal Crossing grass color
+    const planeGeometry = new THREE.PlaneGeometry(1000, 1000);
     
-    // Create shader material for grass and flowers
-    const grassMaterial = new THREE.ShaderMaterial({
-      uniforms: {
-        time: { value: 0 },
-        resolution: { value: new THREE.Vector2(window.innerWidth, window.innerHeight) }
-      },
-      vertexShader: `
-        varying vec2 vUv;
-        varying vec3 vPosition;
-        varying float vHeight;
-        
-        void main() {
-          vUv = uv;
-          vPosition = position;
-          
-          // Create height variation using multiple noise layers
-          float height = 0.0;
-          height += sin(position.x * 10.0) * 0.1;
-          height += sin(position.z * 8.0) * 0.15;
-          height += sin(position.x * 5.0 + position.z * 3.0) * 0.2;
-          
-          vHeight = height;
-          
-          // Apply height to vertex position
-          vec3 newPosition = position;
-          newPosition.y += height;
-          
-          gl_Position = projectionMatrix * modelViewMatrix * vec4(newPosition, 1.0);
-        }
-      `,
-      fragmentShader: `
-        uniform float time;
-        uniform vec2 resolution;
-        varying vec2 vUv;
-        varying vec3 vPosition;
-        varying float vHeight;
-
-        // Noise functions
-        float random(vec2 st) {
-          return fract(sin(dot(st.xy, vec2(12.9898,78.233))) * 43758.5453123);
-        }
-
-        float noise(vec2 st) {
-          vec2 i = floor(st);
-          vec2 f = fract(st);
-          
-          float a = random(i);
-          float b = random(i + vec2(1.0, 0.0));
-          float c = random(i + vec2(0.0, 1.0));
-          float d = random(i + vec2(1.0, 1.0));
-
-          vec2 u = f * f * (3.0 - 2.0 * f);
-          return mix(a, b, u.x) + (c - a)* u.y * (1.0 - u.x) + (d - b) * u.x * u.y;
-        }
-
-        void main() {
-          vec2 st = vPosition.xz * 10.0;
-          
-          // Base grass color with height-based variation
-          float grassNoise = noise(st + time * 0.1);
-          vec3 grassColor = mix(
-            vec3(0.1, 0.4, 0.1),  // Dark green
-            vec3(0.2, 0.6, 0.2),  // Light green
-            grassNoise + vHeight * 0.5
-          );
-          
-          // Add some yellow flowers occasionally
-          float flowerChance = random(st * 2.0);
-          if (flowerChance > 0.95) {
-            float flowerSize = random(st * 3.0) * 0.2;
-            vec2 flowerPos = fract(st * 2.0);
-            float dist = length(flowerPos - vec2(0.5));
-            if (dist < flowerSize) {
-              grassColor = mix(
-                vec3(1.0, 1.0, 0.0),  // Yellow
-                vec3(1.0, 0.8, 0.0),  // Orange-yellow
-                random(st)
-              );
-            }
-          }
-          
-          // Add some white flowers occasionally
-          if (flowerChance > 0.98) {
-            float flowerSize = random(st * 4.0) * 0.15;
-            vec2 flowerPos = fract(st * 3.0);
-            float dist = length(flowerPos - vec2(0.5));
-            if (dist < flowerSize) {
-              grassColor = vec3(1.0);  // White
-            }
-          }
-          
-          gl_FragColor = vec4(grassColor, 1.0);
-        }
-      `,
-      side: THREE.DoubleSide
+    // Load and configure the texture
+    const textureLoader = new THREE.TextureLoader();
+    const texture = textureLoader.load('/animal-crossing.png');
+    texture.wrapS = THREE.RepeatWrapping;
+    texture.wrapT = THREE.RepeatWrapping;
+    texture.repeat.set(500, 500);
+    
+    // Create custom toon material for the ground
+    const groundMaterial = new THREE.MeshToonMaterial({
+      map: texture,
+      gradientMap: createToonGradient(),
+      color: 0x8dc63f, // Brighter, more vibrant grass green
+      side: THREE.DoubleSide,
+      emissive: 0x1a4d1a, // Slight green glow
+      emissiveIntensity: 0.2
     });
     
-    const plane = new THREE.Mesh(planeGeometry, grassMaterial);
+    const plane = new THREE.Mesh(planeGeometry, groundMaterial);
     plane.rotation.x = Math.PI / 2;
     plane.position.y = 0;
     scene.add(plane);
 
-    // Create cube
+    // Create cube with toon materials
     const cube = new THREE.Mesh(
       new THREE.BoxGeometry(1, 2, 1),
       [
-        new THREE.MeshBasicMaterial({ color: 0x59C4F6 }), // right
-        new THREE.MeshBasicMaterial({ color: 0x4A90E2 }), // left
-        new THREE.MeshBasicMaterial({ color: 0x357ABD }), // top
-        new THREE.MeshBasicMaterial({ color: 0x2D6DA3 }), // bottom
-        new THREE.MeshBasicMaterial({ color: 0x1E4B7A }), // front
-        new THREE.MeshBasicMaterial({ color: 0x0F2D4D })  // back
+        new THREE.MeshToonMaterial({ color: 0x59C4F6, gradientMap: createToonGradient() }), // right
+        new THREE.MeshToonMaterial({ color: 0x4A90E2, gradientMap: createToonGradient() }), // left
+        new THREE.MeshToonMaterial({ color: 0x357ABD, gradientMap: createToonGradient() }), // top
+        new THREE.MeshToonMaterial({ color: 0x2D6DA3, gradientMap: createToonGradient() }), // bottom
+        new THREE.MeshToonMaterial({ color: 0x1E4B7A, gradientMap: createToonGradient() }), // front
+        new THREE.MeshToonMaterial({ color: 0x0F2D4D, gradientMap: createToonGradient() })  // back
       ]
     );
     cubeRef.current = cube;
     container.add(cube);
+
+    // Helper function to create toon gradient
+    function createToonGradient() {
+      const gradientTexture = new THREE.DataTexture(
+        new Uint8Array([0, 127, 255]), // Three steps for toon shading
+        3, // width
+        1, // height
+        THREE.LuminanceFormat
+      );
+      gradientTexture.minFilter = THREE.NearestFilter;
+      gradientTexture.magFilter = THREE.NearestFilter;
+      gradientTexture.generateMipmaps = false;
+      return gradientTexture;
+    }
 
     // Position container to start at ground level
     container.position.y = 1; // Half the height of the cube (2/2) to place it on ground

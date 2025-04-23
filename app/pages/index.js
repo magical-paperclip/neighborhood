@@ -7,6 +7,14 @@ import { useState } from "react";
 
 export default function Home() {
   const [hasEnteredNeighborhood, setHasEnteredNeighborhood] = useState(false);
+  const [selectedItem, setSelectedItem] = useState('start');
+
+  const menuItems = [
+    { id: 'start', text: 'Start Hacking' },
+    { id: 'bulletin', text: 'Bulletin' },
+    { id: 'journal', text: 'Journal' },
+    { id: 'rewards', text: 'Rewards' }
+  ];
 
   return (
     <>
@@ -21,12 +29,23 @@ export default function Home() {
         setHasEnteredNeighborhood={setHasEnteredNeighborhood}
       />
       <div>
-        <div style={{height: "100vh", width: "100%", gap: 32, justifyContent: "space-between", paddingTop: 32, paddingBottom: 32, display: "flex", flexDirection: "column", paddingLeft: 32}}>
+        <div style={{height: "100vh", width: "100%", gap: 32, justifyContent: "space-between", paddingTop: 16, paddingBottom: 16, display: "flex", flexDirection: "column", paddingLeft: 32}}>
         
         <div style={{position: "absolute", right: 16, bottom: 16}}>
           {!hasEnteredNeighborhood &&
           <button 
-            style={{padding: "8px"}}
+            style={{
+              padding: "8px 16px",
+              fontFamily: "M PLUS Rounded 1c",
+              fontSize: "24px",
+              border: "1px solid #FFF9E6",
+              background: "none",
+              cursor: "pointer",
+              backgroundColor: "#007C74",
+              color: "#FFF9E6",
+              fontWeight: "bold",
+              borderRadius: "8px"
+            }}
             onClick={() => setHasEnteredNeighborhood(true)}
           >
             Enter Neighborhood
@@ -35,20 +54,57 @@ export default function Home() {
 
         {!hasEnteredNeighborhood &&
         <div style={{display: "flex", flexDirection: "column", gap: 16}}>
-          <h1 style={{fontSize: 58, color: "#000"}}>Neighborhood</h1>
-          <p style={{fontSize: 42, color: "#000"}}>Start Hacking</p>
-          <p style={{fontSize: 42, color: "#000"}}>Bulletin Board</p>
-          <p style={{fontSize: 42, color: "#000"}}>Journal</p>
-          <p style={{fontSize: 42, color: "#000"}}>Rewards</p>
+          <img style={{width: 250, imageRendering: "pixelated"}} src="./HackClubSF.png"/>
+          {menuItems.map((item) => (
+            <div 
+              key={item.id}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+                cursor: "pointer"
+              }}
+              onMouseEnter={() => setSelectedItem(item.id)}
+              onMouseLeave={() => {}}
+            >
+              <span 
+                style={{
+                  fontFamily: "M PLUS Rounded 1c",
+                  fontSize: "24px",
+                  color: "#FFF9E6",
+                  visibility: selectedItem === item.id ? "visible" : "hidden",
+                  animation: selectedItem === item.id ? "blink 1s steps(1) infinite" : "none",
+                  fontWeight: "bold"
+                }}
+              >
+                {"●"}
+              </span>
+              <p style={{
+                fontFamily: "M PLUS Rounded 1c",
+                fontSize: "32px",
+                color: "#F5F7E1",
+                fontWeight: "bold"
+              }}>
+                {item.text}
+              </p>
+            </div>
+          ))}
         </div>}
 
         {!hasEnteredNeighborhood &&
-        <div>
-          <p style={{color: "#000"}}>15 active rn</p>
+        <div style={{display: "flex", justifyContent: "space-between", flexDirection: "column"}}>
+          <p style={{color: "#FCEA64", fontFamily: "M PLUS Rounded 1c", fontWeight: "bold"}}>made with {"<3"}</p>
         </div>}
         
         </div>
       </div>
+      <style jsx global>{`
+        @keyframes blink {
+          0% { visibility: visible; }
+          50% { visibility: hidden; }
+          100% { visibility: visible; }
+        }
+      `}</style>
     </>
   );
 }
