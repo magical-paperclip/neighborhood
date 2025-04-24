@@ -3,10 +3,12 @@ import Image from "next/image";
 import { Geist, Geist_Mono } from "next/font/google";
 import styles from "@/styles/Home.module.css";
 import NeighborhoodEnvironment from "@/components/NeighborhoodEnvironment";
+import SignupComponent from "@/components/SignupComponent";
 import { useState } from "react";
 
 export default function Home() {
   const [hasEnteredNeighborhood, setHasEnteredNeighborhood] = useState(false);
+  const [hasSignedIn, setHasSignedIn] = useState(false);
   const [selectedItem, setSelectedItem] = useState('start');
 
   const menuItems = [
@@ -24,6 +26,8 @@ export default function Home() {
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <link rel="icon" href="/favicon.ico" />
       </Head>
+      {hasSignedIn ? 
+      <>
       <NeighborhoodEnvironment 
         hasEnteredNeighborhood={hasEnteredNeighborhood} 
         setHasEnteredNeighborhood={setHasEnteredNeighborhood}
@@ -42,11 +46,11 @@ export default function Home() {
               background: "none",
               cursor: "pointer",
               backgroundColor: "#007C74",
+              backgroundColor: "#007C74",
               color: "#FFF9E6",
               fontWeight: "bold",
               borderRadius: "8px"
             }}
-            onClick={() => setHasEnteredNeighborhood(true)}
           >
             Enter Neighborhood
           </button>}
@@ -105,6 +109,9 @@ export default function Home() {
           100% { visibility: visible; }
         }
       `}</style>
+      </> :
+      <SignupComponent />
+      }
     </>
   );
 }

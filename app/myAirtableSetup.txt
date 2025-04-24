@@ -1,0 +1,19 @@
+"neighbors" (users table)
+
+email (string)
+token (string)
+
+
+"sessions" 
+
+"commits"
+
+"projects"
+
+"OTP" (one time password)
+
+"invites" 
+
+"emails"
+
+"Hack Clubbers"
