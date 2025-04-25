@@ -111,7 +111,7 @@ export default function SignupComponent({ setHasSignedIn }) {
       }
 
       try {
-        const response = await fetch('http://localhost:3001/api/signup', {
+        const response = await fetch('https://neighborhood.hackclub.dev/api/signup', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -193,7 +193,7 @@ export default function SignupComponent({ setHasSignedIn }) {
     const formattedEmail = email.toLowerCase().trim();
 
     try {
-      const response = await fetch('http://localhost:3001/api/verifyOTP', {
+      const response = await fetch('https://neighborhood.hackclub.dev/api/verifyOTP', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
