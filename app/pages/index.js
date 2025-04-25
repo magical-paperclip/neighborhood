@@ -5,6 +5,9 @@ import styles from "@/styles/Home.module.css";
 import NeighborhoodEnvironment from "@/components/NeighborhoodEnvironment";
 import SignupComponent from "@/components/SignupComponent";
 import RewardsComponent from "@/components/RewardsComponent";
+import JournalComponent from "@/components/JournalComponent";
+import BulletinComponent from "@/components/BulletinComponent";
+import HackTimeComponent from "@/components/HackTimeComponent";
 import { useState, useEffect } from "react";
 
 export default function Home() {
@@ -24,7 +27,7 @@ export default function Home() {
     window.location.reload();
   };
 
-  const handleCloseRewards = () => {
+  const handleCloseComponent = () => {
     setIsExiting(true);
     setTimeout(() => {
       setUIPage("");
@@ -49,11 +52,29 @@ export default function Home() {
       </Head>
       {isSignedIn ? 
       <>
-      {(UIPage == "rewards" || isExiting) && 
+      {(UIPage == "rewards" || (isExiting && UIPage === "rewards")) && 
         <RewardsComponent 
           isExiting={isExiting}
-          onClose={handleCloseRewards}
+          onClose={handleCloseComponent}
           setUIPage={setUIPage}
+        />
+      }
+      {(UIPage == "journal" || (isExiting && UIPage === "journal")) && 
+        <JournalComponent 
+          isExiting={isExiting}
+          onClose={handleCloseComponent}
+        />
+      }
+      {(UIPage == "bulletin" || (isExiting && UIPage === "bulletin")) && 
+        <BulletinComponent 
+          isExiting={isExiting}
+          onClose={handleCloseComponent}
+        />
+      }
+      {(UIPage == "start" || (isExiting && UIPage === "start")) && 
+        <HackTimeComponent 
+          isExiting={isExiting}
+          onClose={handleCloseComponent}
         />
       }
 
