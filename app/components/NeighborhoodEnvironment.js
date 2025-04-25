@@ -1,7 +1,6 @@
 import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
-import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader';
-import { MTLLoader } from 'three/examples/jsm/loaders/MTLLoader';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
 
 // Function to create a toon gradient texture
 function createToonGradient() {
@@ -40,6 +39,9 @@ export default function NeighborhoodEnvironment({ hasEnteredNeighborhood, setHas
   const startTimeRef = useRef(null);
   const cameraRef = useRef(null);
   const playerRef = useRef(null);
+  const mixerRef = useRef(null);
+  const currentActionRef = useRef(null);
+  const animationsRef = useRef(null);
   const keysRef = useRef({
     w: false,
     a: false,
@@ -68,7 +70,7 @@ export default function NeighborhoodEnvironment({ hasEnteredNeighborhood, setHas
     };
 
     // Add a lookAt target for gameplay that's ahead of the player
-    const gameplayLookAtOffset = new THREE.Vector3(0, 2, 8); // Look further ahead and up
+    const gameplayLookAtOffset = new THREE.Vector3(0, 2, 0); // Look further ahead and up
 
     // Setup scene with Animal Crossing sky color
     const scene = new THREE.Scene();
@@ -142,143 +144,59 @@ export default function NeighborhoodEnvironment({ hasEnteredNeighborhood, setHas
     scene.add(plane);
 
     // Load player model with materials
-    const mtlLoader = new MTLLoader();
-    const objLoader = new OBJLoader();
-    
-    mtlLoader.setPath('/models/');
-    objLoader.setPath('/models/');
+    const gltfLoader = new GLTFLoader();
+    gltfLoader.setPath('/models/');
     
     let playerModel = null;
 
-    // First load the materials
-    mtlLoader.load(
-      'model.mtl',
-      (materials) => {
-        materials.preload();
-        objLoader.setMaterials(materials);
-        
-        // Then load the object
-        objLoader.load(
-          '25_04_23_17_52_28_866.obj',
-          (obj) => {
-            playerModel = obj;
-            playerModel.scale.set(0.009, 0.009, 0.009);
-            playerModel.rotation.y = (Math.PI / 4) * -1; // Rotate 180 degrees to face backward
+    gltfLoader.load(
+      'player.glb',
+      (gltf) => {
+        playerModel = gltf.scene;
+        playerModel.scale.set(0.027, 0.027, 0.027);
+        playerModel.rotation.y = (Math.PI / 4) * -1; // Rotate 180 degrees to face backward
 
-            const textureLoader = new THREE.TextureLoader();
-            textureLoader.setPath('/models/');
-
-            // Function to load a set of textures for a given index
-            const loadTextureSet = async (index) => {
-              const textures = {
-                map: await new Promise(resolve => textureLoader.load(
-                  `model_${index}_color.png`,
-                  texture => {
-                    // Increase saturation while preserving colors
-                    const canvas = document.createElement('canvas');
-                    canvas.width = texture.image.width;
-                    canvas.height = texture.image.height;
-                    const ctx = canvas.getContext('2d');
-                    ctx.drawImage(texture.image, 0, 0);
-                    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                    const data = imageData.data;
-                    
-                    // Increase saturation while preserving colors
-                    for (let i = 0; i < data.length; i += 4) {
-                      const r = data[i];
-                      const g = data[i + 1];
-                      const b = data[i + 2];
-                      const max = Math.max(r, g, b);
-                      const min = Math.min(r, g, b);
-                      const l = (max + min) / 2;
-                      const s = max === min ? 0 : (max - min) / (max + min);
-                      const newS = Math.min(s * 2.0, 1); // Double the saturation
-                      const newMax = l + newS * l;
-                      const newMin = l - newS * l;
-                      
-                      data[i] = r === max ? newMax : r === min ? newMin : r;
-                      data[i + 1] = g === max ? newMax : g === min ? newMin : g;
-                      data[i + 2] = b === max ? newMax : b === min ? newMin : b;
-                    }
-                    
-                    ctx.putImageData(imageData, 0, 0);
-                    const newTexture = new THREE.Texture(canvas);
-                    newTexture.needsUpdate = true;
-                    resolve(newTexture);
-                  },
-                  undefined,
-                  () => resolve(null)
-                )),
-                normalMap: await new Promise(resolve => textureLoader.load(
-                  `model_${index}_normal.png`,
-                  texture => resolve(texture),
-                  undefined,
-                  () => resolve(null)
-                ))
-              };
-
-              return new THREE.MeshToonMaterial({
-                ...textures,
-                gradientMap: createToonGradient(),
-                side: THREE.DoubleSide,
-                shininess: 0
-                // Removed all emissive properties to prevent whitening
-              });
-            };
-
-            // Load all texture sets (0-11)
-            Promise.all(
-              Array.from({ length: 12 }, (_, i) => loadTextureSet(i))
-            ).then(materials => {
-              let meshIndex = 0;
-              playerModel.traverse((child) => {
-                if (child.isMesh) {
-                  // Apply the corresponding material to each mesh
-                  child.material = materials[meshIndex % materials.length];
-                  meshIndex++;
-                }
-              });
+        // Add toon shading to existing materials
+        playerModel.traverse((child) => {
+          if (child.isMesh) {
+            const originalMaterial = child.material;
+            // Create a new toon material that preserves the original textures
+            const toonMaterial = new THREE.MeshToonMaterial({
+              map: originalMaterial.map,
+              normalMap: originalMaterial.normalMap,
+              gradientMap: createToonGradient(),
+              side: THREE.DoubleSide,
+              color: originalMaterial.color,
+              transparent: originalMaterial.transparent,
+              opacity: originalMaterial.opacity
             });
-
-            // Add model to scene
-            container.add(playerModel);
-            playerRef.current = playerModel;
-          },
-          (xhr) => {
-            console.log((xhr.loaded / xhr.total * 100) + '% loaded');
-          },
-          (error) => {
-            console.error('An error occurred while loading the model:', error);
+            child.material = toonMaterial;
           }
-        );
+        });
+
+        // Set up animations
+        if (gltf.animations && gltf.animations.length > 0) {
+          mixerRef.current = new THREE.AnimationMixer(playerModel);
+          animationsRef.current = gltf.animations; // Store animations
+          
+          const idleAnimation = animationsRef.current.find(anim => anim.name.toLowerCase().includes('idle'));
+          const runAnimation = animationsRef.current.find(anim => anim.name.toLowerCase().includes('run'));
+          
+          if (idleAnimation) {
+            const action = mixerRef.current.clipAction(idleAnimation);
+            action.play();
+            currentActionRef.current = action;
+          }
+        }
+
+        container.add(playerModel);
+        playerRef.current = playerModel;
       },
-      undefined,
+      (xhr) => {
+        console.log((xhr.loaded / xhr.total * 100) + '% loaded');
+      },
       (error) => {
-        console.error('An error occurred while loading the materials:', error);
-        
-        // Fallback to basic material if MTL fails
-        objLoader.load(
-          '25_04_23_17_52_28_866.obj',
-          (obj) => {
-            playerModel = obj;
-            playerModel.scale.set(0.009, 0.009, 0.009);
-            playerModel.rotation.y = (Math.PI / 4) * -1; // Match the rotation in fallback case
-            
-            // Apply toon material for visibility
-            playerModel.traverse((child) => {
-              if (child.isMesh) {
-                child.material = new THREE.MeshToonMaterial({
-                  color: 0x4287f5,
-                  gradientMap: createToonGradient(),
-                  side: THREE.DoubleSide
-                });
-              }
-            });
-            
-            container.add(playerModel);
-            playerRef.current = playerModel;
-          }
-        );
+        console.error('An error occurred while loading the model:', error);
       }
     );
 
@@ -372,6 +290,35 @@ export default function NeighborhoodEnvironment({ hasEnteredNeighborhood, setHas
     const animate = (timestamp) => {
       if (!startTimeRef.current) startTimeRef.current = timestamp;
       const progress = Math.min((timestamp - startTimeRef.current) / 1000, 1);
+      
+      // Update animation mixer
+      if (mixerRef.current && animationsRef.current) {
+        const deltaTime = (timestamp - startTimeRef.current) / 1000;
+        mixerRef.current.update(deltaTime);
+        
+        // Check if player is moving (W or S key pressed)
+        const isMoving = keysRef.current.w || keysRef.current.s;
+        
+        // Find appropriate animation
+        const idleAnimation = animationsRef.current.find(anim => anim.name.toLowerCase().includes('idle'));
+        const runAnimation = animationsRef.current.find(anim => anim.name.toLowerCase().includes('run'));
+        
+        if (isMoving && runAnimation && currentActionRef.current?.clip !== runAnimation) {
+          if (currentActionRef.current) {
+            currentActionRef.current.fadeOut(0.2);
+          }
+          const newAction = mixerRef.current.clipAction(runAnimation);
+          newAction.reset().fadeIn(0.2).play();
+          currentActionRef.current = newAction;
+        } else if (!isMoving && idleAnimation && currentActionRef.current?.clip !== idleAnimation) {
+          if (currentActionRef.current) {
+            currentActionRef.current.fadeOut(0.2);
+          }
+          const newAction = mixerRef.current.clipAction(idleAnimation);
+          newAction.reset().fadeIn(0.2).play();
+          currentActionRef.current = newAction;
+        }
+      }
       
       // Smooth easing
       const eased = progress < .5 ? 
@@ -531,6 +478,9 @@ export default function NeighborhoodEnvironment({ hasEnteredNeighborhood, setHas
       
       if (animationRef.current) {
         cancelAnimationFrame(animationRef.current);
+      }
+      if (mixerRef.current) {
+        mixerRef.current.stopAllAction();
       }
       if (containerRef.current && renderer.domElement) {
         containerRef.current.removeChild(renderer.domElement);
