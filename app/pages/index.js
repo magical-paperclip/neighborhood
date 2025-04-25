@@ -4,12 +4,15 @@ import { Geist, Geist_Mono } from "next/font/google";
 import styles from "@/styles/Home.module.css";
 import NeighborhoodEnvironment from "@/components/NeighborhoodEnvironment";
 import SignupComponent from "@/components/SignupComponent";
+import RewardsComponent from "@/components/RewardsComponent";
 import { useState, useEffect } from "react";
 
 export default function Home() {
+  const [UIPage, setUIPage] = useState('');
   const [hasEnteredNeighborhood, setHasEnteredNeighborhood] = useState(false);
   const [selectedItem, setSelectedItem] = useState('start');
   const [isSignedIn, setIsSignedIn] = useState(true);
+  const [isExiting, setIsExiting] = useState(false);
 
   useEffect(() => {
     const token = localStorage.getItem('neighborhoodToken');
@@ -19,6 +22,14 @@ export default function Home() {
   const handleLogout = () => {
     localStorage.removeItem('neighborhoodToken');
     window.location.reload();
+  };
+
+  const handleCloseRewards = () => {
+    setIsExiting(true);
+    setTimeout(() => {
+      setUIPage("");
+      setIsExiting(false);
+    }, 300); // Match animation duration
   };
 
   const menuItems = [
@@ -38,6 +49,14 @@ export default function Home() {
       </Head>
       {isSignedIn ? 
       <>
+      {(UIPage == "rewards" || isExiting) && 
+        <RewardsComponent 
+          isExiting={isExiting}
+          onClose={handleCloseRewards}
+          setUIPage={setUIPage}
+        />
+      }
+
       <NeighborhoodEnvironment 
         hasEnteredNeighborhood={hasEnteredNeighborhood} 
         setHasEnteredNeighborhood={setHasEnteredNeighborhood}
@@ -90,6 +109,7 @@ export default function Home() {
               }}
               onMouseEnter={() => setSelectedItem(item.id)}
               onMouseLeave={() => {}}
+              onClick={() => setUIPage(item.id)}
             >
               <span 
                 style={{
@@ -127,6 +147,38 @@ export default function Home() {
           0% { visibility: visible; }
           50% { visibility: hidden; }
           100% { visibility: visible; }
+        }
+
+        @keyframes popIn {
+          0% {
+            opacity: 0;
+            transform: scale(0.95);
+          }
+          100% {
+            opacity: 1;
+            transform: scale(1);
+          }
+        }
+
+        @keyframes popOut {
+          0% {
+            opacity: 1;
+            transform: scale(1);
+          }
+          100% {
+            opacity: 0;
+            transform: scale(0.95);
+          }
+        }
+
+        .pop-in {
+          animation: popIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+
+        .pop-in.hidden {
+          animation: popOut 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+          opacity: 0;
+          transform: scale(0.95);
         }
       `}</style>
       </> :
