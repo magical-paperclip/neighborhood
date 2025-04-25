@@ -8,17 +8,17 @@ import { useState, useEffect } from "react";
 
 export default function Home() {
   const [hasEnteredNeighborhood, setHasEnteredNeighborhood] = useState(false);
-  const [hasSignedIn, setHasSignedIn] = useState(true);
   const [selectedItem, setSelectedItem] = useState('start');
+  const [isSignedIn, setIsSignedIn] = useState(true);
 
   useEffect(() => {
     const token = localStorage.getItem('neighborhoodToken');
-    setHasSignedIn(!!token);
+    setIsSignedIn(!!token);
   }, []);
 
   const handleLogout = () => {
     localStorage.removeItem('neighborhoodToken');
-    setHasSignedIn(false);
+    window.location.reload();
   };
 
   const menuItems = [
@@ -36,7 +36,7 @@ export default function Home() {
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <link rel="icon" href="/favicon.ico" />
       </Head>
-      {hasSignedIn ? 
+      {isSignedIn ? 
       <>
       <NeighborhoodEnvironment 
         hasEnteredNeighborhood={hasEnteredNeighborhood} 
@@ -130,7 +130,7 @@ export default function Home() {
         }
       `}</style>
       </> :
-      <SignupComponent setHasSignedIn={setHasSignedIn} hasSignedIn={hasSignedIn} />
+      <SignupComponent />
       }
     </>
   );

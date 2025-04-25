@@ -210,11 +210,14 @@ export default function SignupComponent({ setHasSignedIn }) {
         setError('');
         setToken(data.token);
         localStorage.setItem('neighborhoodToken', data.token);
-        setHasSignedIn(true);
         playSuccessSequence();
         setStage(2);
+        // Reload the page after a short delay to show success state
+        setTimeout(() => {
+          window.location.reload();
+        }, 1000);
       } else {
-        setError('that did not work. ');
+        setError('wrong email key. ');
         playFailureSequence();
       }
     } catch (err) {
@@ -380,7 +383,7 @@ export default function SignupComponent({ setHasSignedIn }) {
             )}
             {stage === 2 && (
               <div>
-                <p>Successfully verified! Your token: {token}</p>
+                <p style={{color: "#fff", textAlign: "center", fontWeight: 700}}>Welcome back to Neighborhood {"<3"}</p>
               </div>
             )}
           </div>
