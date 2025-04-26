@@ -17,6 +17,8 @@ export default function Home() {
   const [selectedItem, setSelectedItem] = useState('start');
   const [isSignedIn, setIsSignedIn] = useState(true);
   const [isExiting, setIsExiting] = useState(false);
+  const [userData, setUserData] = useState();
+
   const banjoSound = useRef(null);
 
   useEffect(() => {
