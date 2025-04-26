@@ -19,7 +19,8 @@ const BulletinComponent = ({ isExiting, onClose }) => {
         display: "flex", 
         flexDirection: "row", 
         justifyContent: "space-between", 
-        padding: 8,
+        alignItems: "center",
+        padding: "8px 16px",
         borderBottom: "1px solid #00000010",
         backgroundColor: "#ffffff"
       }}>

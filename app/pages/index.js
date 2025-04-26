@@ -8,7 +8,7 @@ import RewardsComponent from "@/components/RewardsComponent";
 import JournalComponent from "@/components/JournalComponent";
 import BulletinComponent from "@/components/BulletinComponent";
 import HackTimeComponent from "@/components/HackTimeComponent";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 
 export default function Home() {
   const [UIPage, setUIPage] = useState('');
@@ -16,11 +16,21 @@ export default function Home() {
   const [selectedItem, setSelectedItem] = useState('start');
   const [isSignedIn, setIsSignedIn] = useState(true);
   const [isExiting, setIsExiting] = useState(false);
+  const banjoSound = useRef(null);
 
   useEffect(() => {
     const token = localStorage.getItem('neighborhoodToken');
     setIsSignedIn(!!token);
+    // Initialize audio
+    banjoSound.current = new Audio('/banjo.mp3');
   }, []);
+
+  const playBanjoSound = () => {
+    if (banjoSound.current) {
+      banjoSound.current.currentTime = 0;
+      banjoSound.current.play();
+    }
+  };
 
   const handleLogout = () => {
     localStorage.removeItem('neighborhoodToken');
@@ -33,6 +43,11 @@ export default function Home() {
       setUIPage("");
       setIsExiting(false);
     }, 300); // Match animation duration
+  };
+
+  const handleMenuItemClick = (itemId) => {
+    playBanjoSound();
+    setUIPage(itemId);
   };
 
   const menuItems = [
@@ -130,7 +145,7 @@ export default function Home() {
               }}
               onMouseEnter={() => setSelectedItem(item.id)}
               onMouseLeave={() => {}}
-              onClick={() => setUIPage(item.id)}
+              onClick={() => handleMenuItemClick(item.id)}
             >
               <span 
                 style={{

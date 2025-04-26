@@ -322,7 +322,8 @@ const RewardsComponent = ({ isExiting, onClose, setUIPage }) => {
         display: "flex", 
         flexDirection: "row", 
         justifyContent: "space-between", 
-        padding: 8,
+        alignItems: "center",
+        padding: "8px 16px",
         borderBottom: "1px solid #ffffff10",
         backgroundColor: "#0a0a0a"
       }}>
