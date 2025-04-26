@@ -1,13 +1,14 @@
 import React, { useState, useRef, useEffect } from 'react';
 import ShaderBackground from './ShaderBackground';
 import Soundfont from 'soundfont-player';
+import { setToken } from '@/utils/storage';
 
 export default function SignupComponent({ setHasSignedIn }) {
   const [email, setEmail] = useState('');
   const [otpPassword, setOtpPassword] = useState(['', '', '', '']);
   const [stage, setStage] = useState(-1); // Start at -1 for initial animation
   const [error, setError] = useState('');
-  const [token, setToken] = useState('');
+  const [authToken, setAuthToken] = useState('');
   const [piano, setPiano] = useState(null);
   const [playSuccess, setPlaySuccess] = useState(false);
   const [animatedInputs, setAnimatedInputs] = useState([false, false, false, false]);
@@ -208,8 +209,8 @@ export default function SignupComponent({ setHasSignedIn }) {
       
       if (response.ok) {
         setError('');
+        setAuthToken(data.token);
         setToken(data.token);
-        localStorage.setItem('neighborhoodToken', data.token);
         playSuccessSequence();
         setStage(2);
         // Reload the page after a short delay to show success state

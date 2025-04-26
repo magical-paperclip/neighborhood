@@ -9,6 +9,7 @@ import JournalComponent from "@/components/JournalComponent";
 import BulletinComponent from "@/components/BulletinComponent";
 import HackTimeComponent from "@/components/HackTimeComponent";
 import { useState, useEffect, useRef } from "react";
+import { getToken, removeToken } from "@/utils/storage";
 
 export default function Home() {
   const [UIPage, setUIPage] = useState('');
@@ -19,7 +20,8 @@ export default function Home() {
   const banjoSound = useRef(null);
 
   useEffect(() => {
-    const token = localStorage.getItem('neighborhoodToken');
+    const token = getToken();
+    console.log(token);
     setIsSignedIn(!!token);
     // Initialize audio
     banjoSound.current = new Audio('/banjo.mp3');
@@ -33,7 +35,7 @@ export default function Home() {
   };
 
   const handleLogout = () => {
-    localStorage.removeItem('neighborhoodToken');
+    removeToken();
     window.location.reload();
   };
 
