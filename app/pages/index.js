@@ -18,13 +18,15 @@ export default function Home() {
   const [isSignedIn, setIsSignedIn] = useState(true);
   const [isExiting, setIsExiting] = useState(false);
   const [userData, setUserData] = useState();
+  const [token, setToken] = useState("");
 
   const banjoSound = useRef(null);
 
   useEffect(() => {
-    const token = getToken();
-    console.log(token);
-    setIsSignedIn(!!token);
+    const tokenResponse = getToken();
+    console.log("your token", tokenResponse);
+    setToken(tokenResponse)
+    setIsSignedIn(!!tokenResponse);
     // Initialize audio
     banjoSound.current = new Audio('/banjo.mp3');
   }, []);
@@ -81,6 +83,7 @@ export default function Home() {
       {(UIPage == "journal" || (isExiting && UIPage === "journal")) && 
         <JournalComponent 
           isExiting={isExiting}
+          token={token}
           onClose={handleCloseComponent}
         />
       }
