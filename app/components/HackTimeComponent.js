@@ -308,14 +308,28 @@ const HackTimeComponent = ({ isExiting, onClose }) => {
               {hoveredCard === 'hackatime' && (
                 <audio src="/Hackatime.mp3" autoPlay style={{ display: 'none' }} />
               )}
-              <div style={{width: 86, borderRadius: 8, height: 86, border: "1px solid #ef758a", boxShadow: '0 4px 8px rgba(239,117,138,0.10)', background: '#fff', marginBottom: 8}}></div>
+              <img 
+                src="/tick.png"
+                alt="Hackatime icon"
+                style={{
+                  width: 86,
+                  height: 86,
+                  borderRadius: 8,
+                  border: "1px solid #ef758a",
+                  boxShadow: '0 4px 8px rgba(239,117,138,0.10)',
+                  background: '#fff',
+                  marginBottom: 8,
+                  objectFit: 'contain',
+                  padding: 8
+                }}
+              />
               <p style={{
                 fontWeight: 'bold',
                 fontSize: '1.2em',
                 color: '#ef758a',
                 textShadow: '0 1px 2px rgba(0,0,0,0.04)'
               }}>Hackatime (powerful)</p>
-              <p style={{color: '#786951', fontSize: 19}}>Hackatime is a time-logging tool that latches onto into VS Code and automatically feeds on time as you code. <b>Recommended for serious every hacker.</b></p>
+              <p style={{color: '#786951', fontSize: 19}}>Hackatime is a time-logging tool that latches onto into VS Code and automatically feeds on time as you code. <b>Recommended for every serious hacker.</b></p>
             </div>
             <div
               style={{
@@ -357,11 +371,24 @@ const HackTimeComponent = ({ isExiting, onClose }) => {
               {hoveredCard === 'stopwatch' && (
                 <audio src="/Stopwatch.mp3" autoPlay style={{ display: 'none' }} />
               )}
-              <div style={{width: 86, borderRadius: 8, height: 86, border: "1px solid #f7d359", background: '#fff', marginBottom: 8}}></div>
+              <img 
+                src="/ladybug.png"
+                alt="Stopwatch icon"
+                style={{
+                  width: 86,
+                  height: 86,
+                  borderRadius: 8,
+                  border: "1px solid #f7d359",
+                  background: '#fff',
+                  marginBottom: 8,
+                  objectFit: 'contain',
+                  padding: 8
+                }}
+              />
               <p style={{
                 fontWeight: 'bold',
                 fontSize: '1.2em',
-                color: '#f7d359',
+                color: '#786A50',
                 textShadow: '0 1px 2px rgba(0,0,0,0.04)'
               }}>Stopwatch (casual)</p>
               <p style={{color: '#786951',
@@ -505,7 +532,7 @@ const HackTimeComponent = ({ isExiting, onClose }) => {
           })}
         </div>}
         {timeTrackingMethod == "stopwatch" && 
-        <div style={{ color: "#000" }}>
+        <div style={{ color: "#000", height: "100%" }}>
           <StopwatchComponent />
         </div>}
       </div>
