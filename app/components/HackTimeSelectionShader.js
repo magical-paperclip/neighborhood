@@ -1,7 +1,7 @@
 import React, { useRef, useEffect } from 'react';
 import * as THREE from 'three';
 
-const ShaderBackground = () => {
+const HackTimeSelectionShader = () => {
   const containerRef = useRef();
   const rendererRef = useRef();
   const sceneRef = useRef();
@@ -40,77 +40,24 @@ const ShaderBackground = () => {
         }
       `,
       fragmentShader: `
+        #define PI 3.1415926535897932384626433832795
+        #define PI2 6.2831853071795864769252867665590
+        #define CIRCLE_COLUMNS 16.0
+        #define TIME_SCALE 0.08
         uniform float iTime;
         uniform vec3 iResolution;
-        uniform float iScale;
-        uniform float iZoom;
         varying vec2 vUv;
-
-        #define COL_FREQ 1.0
-        #define RGB_SHIFT vec3(0, 1, 2)
-        #define OPACITY 0.1
-        #define PERSPECTIVE 1.0
-        #define STEPS 100.0
-        #define Z_SPEED 1.0
-        #define TWIST 2.1
-
-        float happy_star(vec2 uv, float anim) {
-          uv = abs(uv);
-          vec2 pos = min(uv.xy/uv.yx, anim);
-          float p = (2.0 - pos.x - pos.y);
-          return (2.0+p*(p*p-1.5)) / (uv.x+uv.y);      
-        }
-
         void main() {
-          // Calculate aspect ratio and center UV coordinates
-          float aspect = iResolution.x / iResolution.y;
-          vec2 uv = (vUv - 0.5) * 2.0;
-          uv.x *= aspect;
-          
-          // Apply zoom and scale
-          uv *= iZoom;
-          uv *= iScale;
-          
-          vec2 res = iResolution.xy;
-          vec3 dir = normalize(vec3(uv, -PERSPECTIVE));
-          
-          vec3 col = vec3(0.0);
-          float z = 0.0;
-          float d = 0.0;
-          vec3 r = vec3(uv, 1.0);
-          vec4 o = vec4(0.0);
-          float t = -iTime;
-          vec3 p;
-
-          for (float i = 0.0, z = 0.0, d; i < 100.0; i++) {
-            p = z * normalize(vec3(uv, 0.5));
-            vec4 angle = vec4(0.0, 33.0, 11.0, 0.0);
-            vec4 a = z * 2.0 - t * 0.1 + angle;
-            p.xy *= mat2(cos(a.x), sin(a.x), sin(a.x), cos(a.x));
-            z += d = length(cos(p + cos(p.yzx + p.x  * 0.2)).xy) / 6.0;
-            o += (sin(p.x - t + vec4(0.0, 2.0, 3.0, 0.0)) + 1.0) / d;
-          }
-
-          o = tanh(o / 1000.0);
-          
-          for (float i = 0.0; i < STEPS; i++) {
-            p = z * dir*o.xyz;
-            p.z -= iTime;
-            float angle = -p.z * TWIST;
-            p.xy *= mat2(cos(angle), -sin(angle), sin(angle), cos(angle));
-            vec3 v = cos(p + sin(p.yzx / 0.3));
-            z += d = length(max(v, v.zxy * OPACITY)) / 6.0;
-            col += (cos(COL_FREQ * p.z + RGB_SHIFT) + 1.0) / d;
-          }
-          
-          col = 1.0 - exp(-col / STEPS / 5e1);
-          vec4 fragColor = vec4(col, 1.0);
-          
-          uv *= 2.0 * (cos(-iTime * 2.0) - 2.5);
-          float anim = sin(iTime * 12.0) * 0.1 + 1.0;
-          fragColor += vec4(happy_star(uv, anim) * vec3(0.5,0.5,0.5)*0.5, 1.0);
-          
-          gl_FragColor = fragColor;
+            vec2 uv = vUv;
+            float circle_rows = (CIRCLE_COLUMNS * iResolution.y) / iResolution.x;
+            float scaledTime = iTime * TIME_SCALE;
+            float circle = -cos((uv.x - scaledTime) * PI2 * CIRCLE_COLUMNS)
+                * cos((uv.y + scaledTime) * PI2 * circle_rows);
+            float stepCircle = step(circle, -sin(iTime + uv.x - uv.y));
+            vec3 bg = vec3(1.0, 0.74, 0.76); // #febdc3
+            vec3 circleCol = vec3(0.94, 0.46, 0.54); // #ef758a
+            vec3 color = mix(bg, circleCol, stepCircle * 0.7); // soft blend
+            gl_FragColor = vec4(color, 1.0);
         }
       `
     });
@@ -128,7 +75,7 @@ const ShaderBackground = () => {
         renderer.setSize(width, height);
         
         // Calculate scale based on window size
-        const scale = Math.min(width, height) / 1000;
+        const scale = Math.max(width, height) / 1000;
         shaderMaterial.uniforms.iScale.value = scale;
         
         shaderMaterial.uniforms.iResolution.value.set(
@@ -182,4 +129,4 @@ const ShaderBackground = () => {
   );
 };
 
-export default ShaderBackground; 
+export default HackTimeSelectionShader; 

@@ -15,9 +15,26 @@ const calculateConnectionPoints = (start, end) => {
   return `M ${startX} ${startY} C ${startX} ${controlPoint1Y}, ${endX} ${controlPoint2Y}, ${endX} ${endY}`;
 };
 
-const RewardBox = ({ top, left, label, isAccessible }) => {
+const RewardBox = ({ top, left, label, isAccessible, index }) => {
   const isSpecialReward = label === "Room Key";
   
+  // Get hour requirement based on index
+  const getHourRequirement = () => {
+    if (index === 0) return "1 hour";
+    if (index === 1) return "5 hours";
+    if (index === 2) return "15 hours";
+    if (index >= 3 && index <= 7) { // Middle ring (Rewards 4-8)
+      const hours = [25, 35, 45, 55, 65];
+      return `${hours[index - 3]} hours`;
+    } else if (index >= 8 && index <= 14) { // Bottom ring (Rewards 9-15)
+      const hours = [70, 75, 80, 85, 90, 95];
+      return `${hours[index - 8]} hours`;
+    } else if (index === 15) { // Room Key
+      return "100 hours";
+    }
+    return "";
+  };
+
   // Determine which drum sound to use based on the reward's position and state
   const getDrumSound = () => {
     if (isSpecialReward) return "kick-bass.mp3"; // Special deep sound for final reward
@@ -119,6 +136,14 @@ const RewardBox = ({ top, left, label, isAccessible }) => {
           "0 0 10px rgba(255,223,128,0.5), 0 2px 4px rgba(0,0,0,0.3)" : 
           "0 1px 2px rgba(0,0,0,0.3)"
       }}>{label}</span>
+      {getHourRequirement() && (
+        <span style={{ 
+          opacity: isAccessible ? 1 : 0.6,
+          color: "#888",
+          fontSize: "12px",
+          marginTop: "-4px"
+        }}>{getHourRequirement()}</span>
+      )}
 
       <style jsx>{`
         .reward-box {
@@ -209,25 +234,25 @@ const RewardsComponent = ({ isExiting, onClose, setUIPage }) => {
   // Define reward positions
   const rewardPositions = [
     // Top Ring (Rewards 1-3) - Shortest arc
-    { top: 200, left: 600, label: "Reward 1" },
-    { top: 175, left: 800, label: "Reward 2" },
-    { top: 200, left: 1000, label: "Reward 3" },
+    { top: 200, left: 600, label: "Sticker Sheet" },
+    { top: 175, left: 800, label: "Verified Tag" },
+    { top: 200, left: 1000, label: "Pet Egg" },
 
     // Middle Ring (Rewards 4-8) - Medium arc
-    { top: 450, left: 300, label: "Reward 4" },
-    { top: 425, left: 550, label: "Reward 5" },
-    { top: 400, left: 800, label: "Reward 6" },
-    { top: 425, left: 1050, label: "Reward 7" },
-    { top: 450, left: 1300, label: "Reward 8" },
+    { top: 450, left: 300, label: "???" },
+    { top: 425, left: 550, label: "???" },
+    { top: 400, left: 800, label: "???" },
+    { top: 425, left: 1050, label: "???" },
+    { top: 450, left: 1300, label: "???" },
 
     // Bottom Ring (Rewards 9-15 + Room Key) - Longest arc, curving upward
-    { top: 800, left: 50, label: "Reward 9" },
-    { top: 750, left: 300, label: "Reward 10" },
-    { top: 700, left: 500, label: "Reward 11" },
-    { top: 675, left: 700, label: "Reward 12" },
-    { top: 675, left: 900, label: "Reward 13" },
-    { top: 700, left: 1100, label: "Reward 14" },
-    { top: 750, left: 1300, label: "Reward 15" },
+    { top: 800, left: 50, label: "???" },
+    { top: 750, left: 300, label: "???" },
+    { top: 700, left: 500, label: "???" },
+    { top: 675, left: 700, label: "???" },
+    { top: 675, left: 900, label: "???" },
+    { top: 700, left: 1100, label: "???" },
+    { top: 750, left: 1300, label: "???" },
     { top: 800, left: 1550, label: "Room Key" }
   ];
 
@@ -405,6 +430,7 @@ const RewardsComponent = ({ isExiting, onClose, setUIPage }) => {
                 left={pos.left}
                 label={pos.label}
                 isAccessible={isRewardAccessible(i)}
+                index={i}
               />
             ))}
           </div>
