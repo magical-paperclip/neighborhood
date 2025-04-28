@@ -9,6 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@slack/web-api": "^7.9.1",
     "airtable": "^0.12.2",
     "next": "15.3.1",
     "react": "^19.0.0",

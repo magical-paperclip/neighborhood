@@ -10,6 +10,7 @@ import BulletinComponent from "@/components/BulletinComponent";
 import HackTimeComponent from "@/components/HackTimeComponent";
 import { useState, useEffect, useRef } from "react";
 import { getToken, removeToken } from "@/utils/storage";
+import { updateSlackUserData } from "@/utils/slack";
 
 export default function Home() {
   const [UIPage, setUIPage] = useState('');
@@ -23,13 +24,24 @@ export default function Home() {
   const banjoSound = useRef(null);
 
   useEffect(() => {
-    const tokenResponse = getToken();
-    console.log("your token", tokenResponse);
-    setToken(tokenResponse)
-    setIsSignedIn(!!tokenResponse);
+    const token = getToken();
+    console.log(token);
+    setIsSignedIn(!!token);
+
+    // If user is signed in, update their Slack data
+    if (token) {
+      updateSlackUserData(token)
+        .then(data => {
+          setUserData(data);
+        })
+        .catch(error => {
+          console.error('Failed to update user data:', error);
+        });
+    }
+
     // Initialize audio
     banjoSound.current = new Audio('/banjo.mp3');
-  }, []);
+  }, [hasEnteredNeighborhood]);
 
   const playBanjoSound = () => {
     if (banjoSound.current) {

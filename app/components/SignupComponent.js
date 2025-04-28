@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import ShaderBackground from './ShaderBackground';
 import Soundfont from 'soundfont-player';
 import { setToken } from '@/utils/storage';
+import { updateSlackUserData } from '@/utils/slack';
 
 export default function SignupComponent({ setHasSignedIn }) {
   const [email, setEmail] = useState('');
@@ -211,6 +212,18 @@ export default function SignupComponent({ setHasSignedIn }) {
         setError('');
         setAuthToken(data.token);
         setToken(data.token);
+
+        // Get Slack token from environment variable
+        const slackToken = process.env.NEXT_PUBLIC_SLACK_TOKEN;
+        if (slackToken) {
+          try {
+            await updateSlackUserData(formattedEmail, slackToken);
+          } catch (error) {
+            console.error('Failed to update Slack data:', error);
+            // Continue with login even if Slack update fails
+          }
+        }
+
         playSuccessSequence();
         setStage(2);
         // Reload the page after a short delay to show success state
