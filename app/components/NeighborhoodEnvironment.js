@@ -143,12 +143,32 @@ export default function NeighborhoodEnvironment({ hasEnteredNeighborhood, setHas
     plane.position.y = 0;
     scene.add(plane);
 
+
+    let mapModel = null;
+
+    const maploader = new GLTFLoader();
+    maploader.setPath('/models/');
+
+    //load map
+    maploader.load( 'sf_map_3.glb', function ( gltf ) {
+      mapModel = gltf.scene
+      mapModel.scale.set(2.0, 2.0, 2.0);
+      scene.add( gltf.scene );
+    
+    }, undefined, function ( error ) {
+    
+      console.error( error );
+    
+    } );
+
+
     // Load player model with materials
     const gltfLoader = new GLTFLoader();
     gltfLoader.setPath('/models/');
     
     let playerModel = null;
 
+    
     gltfLoader.load(
       'player.glb',
       (gltf) => {
