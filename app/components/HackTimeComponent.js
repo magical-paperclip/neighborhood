@@ -13,6 +13,14 @@ const HackTimeComponent = ({ isExiting, onClose }) => {
   const [selectedDays, setSelectedDays] = useState({});
   const [hoveredCard, setHoveredCard] = useState(null); // 'hackatime' | 'stopwatch' | null
   const [activeCard, setActiveCard] = useState(null);
+  const [sessionStatuses, setSessionStatuses] = useState({}); // Track session statuses
+  const [githubLinks, setGithubLinks] = useState({}); // Track GitHub links for projects
+  const [showGithubInput, setShowGithubInput] = useState(false); // Track if GitHub input is shown
+  const [currentProjectForGithub, setCurrentProjectForGithub] = useState(''); // Track which project is being linked
+  const [commitData, setCommitData] = useState({}); // Store commit data for each project
+  const [sessionCommitMatches, setSessionCommitMatches] = useState({}); // Store matches between sessions and commits
+  const [isLoadingCommits, setIsLoadingCommits] = useState({}); // Track loading state per project
+  const [commitFetchErrors, setCommitFetchErrors] = useState({}); // Track fetch errors per project
 
   const fetchProjectSessions = async (projectName) => {
     try {
@@ -46,31 +54,34 @@ const HackTimeComponent = ({ isExiting, onClose }) => {
     }
   };
 
+  // Helper to get all session times for a project
+  const getAllSessionTimes = (projectName) => (projectSessions[projectName] || []).map(session => session.start_time);
+
+  // Helper to get all session times for a commit group
+  const getCommitSessionTimes = (commitGroup) => commitGroup.sessions.map(s => s.start_time);
+
+  // Project-level select/deselect all
   const handleProjectSelect = (projectName) => {
-    setSelectedProjects(prev => {
-      const isSelected = prev.includes(projectName);
-      if (isSelected) {
-        // Remove project and all its sessions/days
-        const newSelectedSessions = { ...selectedSessions };
-        const newSelectedDays = { ...selectedDays };
-        delete newSelectedSessions[projectName];
-        delete newSelectedDays[projectName];
-        setSelectedSessions(newSelectedSessions);
-        setSelectedDays(newSelectedDays);
-        return prev.filter(name => name !== projectName);
-      } else {
-        // Add project and all its sessions/days
-        const newSelectedSessions = { ...selectedSessions };
-        const newSelectedDays = { ...selectedDays };
-        newSelectedSessions[projectName] = projectSessions[projectName]?.map(session => session.start_time) || [];
-        // Select all days
-        const grouped = groupSessionsByDay(projectSessions[projectName] || []);
-        newSelectedDays[projectName] = Object.keys(grouped);
-        setSelectedSessions(newSelectedSessions);
-        setSelectedDays(newSelectedDays);
-        return [...prev, projectName];
-      }
-    });
+    const allSessionTimes = getAllSessionTimes(projectName);
+    const selectedSet = new Set(selectedSessions[projectName] || []);
+    const allSelected = allSessionTimes.length > 0 && allSessionTimes.every(time => selectedSet.has(time));
+
+    if (allSelected) {
+      // Deselect all
+      setSelectedSessions(prev => ({
+        ...prev,
+        [projectName]: []
+      }));
+      setSelectedProjects(prev => prev.filter(name => name !== projectName));
+      setSelectedDays(prev => ({ ...prev, [projectName]: [] }));
+    } else {
+      // Select all (replace, do not append)
+      setSelectedSessions(prev => ({
+        ...prev,
+        [projectName]: [...allSessionTimes]
+      }));
+      setSelectedProjects(prev => [...new Set([...prev, projectName])]);
+    }
   };
 
   const handleDaySelect = (projectName, dayKey) => {
@@ -80,11 +91,14 @@ const HackTimeComponent = ({ isExiting, onClose }) => {
       if (isSelected) {
         // Unselect day and all its sessions
         setSelectedSessions(sessionsPrev => {
-          const grouped = groupSessionsByDay(projectSessions[projectName] || []);
-          const sessionTimes = grouped[dayKey]?.map(s => s.start_time) || [];
+          const grouped = groupSessionsByCommit(projectSessions[projectName] || [], projectName);
+          const sessionTimes = grouped[dayKey]?.sessions.map(s => s.start_time) || [];
           return {
             ...sessionsPrev,
-            [projectName]: (sessionsPrev[projectName] || []).filter(time => !sessionTimes.includes(time))
+            [projectName]: {
+              ...sessionsPrev[projectName],
+              sessions: sessionsPrev[projectName].sessions.filter(time => !sessionTimes.includes(time))
+            }
           };
         });
         return {
@@ -94,11 +108,14 @@ const HackTimeComponent = ({ isExiting, onClose }) => {
       } else {
         // Select day and all its sessions
         setSelectedSessions(sessionsPrev => {
-          const grouped = groupSessionsByDay(projectSessions[projectName] || []);
-          const sessionTimes = grouped[dayKey]?.map(s => s.start_time) || [];
+          const grouped = groupSessionsByCommit(projectSessions[projectName] || [], projectName);
+          const sessionTimes = grouped[dayKey]?.sessions.map(s => s.start_time) || [];
           return {
             ...sessionsPrev,
-            [projectName]: Array.from(new Set([...(sessionsPrev[projectName] || []), ...sessionTimes]))
+            [projectName]: {
+              ...sessionsPrev[projectName],
+              sessions: Array.from(new Set([...sessionsPrev[projectName].sessions, ...sessionTimes]))
+            }
           };
         });
         return {
@@ -119,6 +136,11 @@ const HackTimeComponent = ({ isExiting, onClose }) => {
           [projectName]: projectSessionsArr.filter(time => time !== sessionStartTime)
         };
       } else {
+        // When selecting a session, set its status to 'P' (Pending)
+        setSessionStatuses(prev => ({
+          ...prev,
+          [`${projectName}-${sessionStartTime}`]: 'P'
+        }));
         return {
           ...prev,
           [projectName]: [...projectSessionsArr, sessionStartTime]
@@ -127,21 +149,156 @@ const HackTimeComponent = ({ isExiting, onClose }) => {
     });
   };
 
-  const toggleDayDropdown = (projectName, dayKey) => {
+  const toggleDayDropdown = (projectName, commitSha) => {
+    // If no GitHub repo is linked, show the GitHub input modal
+    if (!githubLinks[projectName]) {
+      setCurrentProjectForGithub(projectName);
+      setShowGithubInput(true);
+      return;
+    }
+
     setOpenedDays(prev => {
       const projectOpened = prev[projectName] || [];
-      if (projectOpened.includes(dayKey)) {
+      if (projectOpened.includes(commitSha)) {
         return {
           ...prev,
-          [projectName]: projectOpened.filter(day => day !== dayKey)
+          [projectName]: projectOpened.filter(sha => sha !== commitSha)
         };
       } else {
         return {
           ...prev,
-          [projectName]: [...projectOpened, dayKey]
+          [projectName]: [...projectOpened, commitSha]
         };
       }
     });
+  };
+
+  const handleGithubLink = (projectName) => {
+    setCurrentProjectForGithub(projectName);
+    setShowGithubInput(true);
+  };
+
+  const fetchGithubCommits = async (repoPath) => {
+    try {
+      console.log(`Fetching commits for ${repoPath}...`);
+      let allCommits = [];
+      let page = 1;
+      let hasMore = true;
+
+      while (hasMore) {
+        const response = await fetch(
+          `https://api.github.com/repos/${repoPath}/commits?author=SerenityUX&per_page=100&page=${page}`
+        );
+        
+        if (!response.ok) {
+          const errorData = await response.json();
+          console.error('GitHub API Error:', errorData);
+          throw new Error(`GitHub API returned ${response.status}: ${errorData.message}`);
+        }
+
+        const commits = await response.json();
+        console.log(`Fetched ${commits.length} commits for ${repoPath} on page ${page}`);
+        
+        // Filter out merge commits and add to all commits
+        const filteredCommits = commits
+          .filter(commit => !commit.commit.message.toLowerCase().includes('merge'))
+          .map(commit => ({
+            sha: commit.sha,
+            message: commit.commit.message,
+            date: new Date(commit.commit.author.date),
+            url: commit.html_url
+          }));
+
+        allCommits = [...allCommits, ...filteredCommits];
+        
+        // Check if we've reached the end
+        hasMore = commits.length === 100;
+        page++;
+      }
+
+      console.log(`Total commits fetched: ${allCommits.length}`);
+      return allCommits;
+    } catch (error) {
+      console.error('Error fetching GitHub commits:', error);
+      setCommitFetchErrors(prev => ({
+        ...prev,
+        [repoPath]: error.message
+      }));
+      return [];
+    }
+  };
+
+  const matchSessionsToCommits = (sessions, commits, projectName) => {
+    // Sort commits by unix time ascending
+    const sortedCommits = [...commits].sort((a, b) => a.date - b.date);
+
+    // For each session, find the earliest commit after the session ends
+    const matches = {};
+    sessions.forEach(session => {
+      const sessionEnd = new Date(session.start_time * 1000 + session.duration * 1000);
+      // Find the first commit after sessionEnd
+      const commit = sortedCommits.find(c => c.date >= sessionEnd);
+      if (commit) {
+        matches[session.start_time] = commit;
+      } else {
+        matches[session.start_time] = null; // Mark as uncommitted
+      }
+    });
+
+    setSessionCommitMatches(prev => ({
+      ...prev,
+      [projectName]: matches
+    }));
+  };
+
+  const handleGithubInputSubmit = async (e) => {
+    e.preventDefault();
+    const input = e.target.elements.githubLink;
+    const githubLink = input.value.trim();
+    
+    if (githubLink) {
+      const match = githubLink.match(/github\.com\/([^\/]+\/[^\/]+)/);
+      if (match) {
+        const repoPath = match[1];
+        setGithubLinks(prev => ({
+          ...prev,
+          [currentProjectForGithub]: repoPath
+        }));
+
+        // Set loading state
+        setIsLoadingCommits(prev => ({
+          ...prev,
+          [currentProjectForGithub]: true
+        }));
+
+        try {
+          // Fetch commits for this repository
+          const commits = await fetchGithubCommits(repoPath);
+          setCommitData(prev => ({
+            ...prev,
+            [currentProjectForGithub]: commits
+          }));
+
+          // Match sessions with commits if we have sessions for this project
+          if (projectSessions[currentProjectForGithub]) {
+            matchSessionsToCommits(
+              projectSessions[currentProjectForGithub],
+              commits,
+              currentProjectForGithub
+            );
+          }
+        } finally {
+          // Clear loading state
+          setIsLoadingCommits(prev => ({
+            ...prev,
+            [currentProjectForGithub]: false
+          }));
+        }
+      }
+    }
+    
+    setShowGithubInput(false);
+    setCurrentProjectForGithub('');
   };
 
   useEffect(() => {
@@ -198,20 +355,304 @@ const HackTimeComponent = ({ isExiting, onClose }) => {
     });
   };
 
-  // Group sessions by day (returns { 'YYYY-MM-DD': [session, ...] })
-  const groupSessionsByDay = (sessions) => {
-    return sessions.reduce((acc, session) => {
-      const date = new Date(session.start_time * 1000);
-      const key = date.toISOString().split('T')[0];
-      if (!acc[key]) acc[key] = [];
-      acc[key].push(session);
-      return acc;
-    }, {});
+  const verifyTimeTotals = (sessions, groupedCommits, projectName) => {
+    // Calculate total time from all sessions
+    const totalSessionTime = sessions.reduce((sum, session) => sum + session.duration, 0);
+    
+    // Calculate total time from all commit groups
+    const totalCommitTime = Object.values(groupedCommits).reduce((sum, group) => {
+      return sum + group.sessions.reduce((groupSum, session) => groupSum + session.duration, 0);
+    }, 0);
+
+    // Log the totals
+    console.log(`\nTime Verification for ${projectName}:`);
+    console.log(`Total Session Time: ${formatDuration(totalSessionTime)}`);
+    console.log(`Total Commit Time: ${formatDuration(totalCommitTime)}`);
+    console.log(`Difference: ${formatDuration(Math.abs(totalSessionTime - totalCommitTime))}`);
+    
+    // Log individual commit totals
+    console.log('\nIndividual Commit Totals:');
+    Object.entries(groupedCommits).forEach(([sha, group]) => {
+      const commitTime = group.sessions.reduce((sum, session) => sum + session.duration, 0);
+      let label;
+      if (sha === 'uncommitted') {
+        label = 'Uncommitted Time';
+      } else if (sha === 'unmatched') {
+        label = 'Unmatched Sessions';
+      } else {
+        label = group.commit.message;
+      }
+      console.log(`${label}: ${formatDuration(commitTime)}`);
+    });
+  };
+
+  const groupSessionsByCommit = (sessions, projectName) => {
+    const matches = sessionCommitMatches[projectName] || {};
+    const grouped = {};
+    
+    // Find the most recent commit date
+    const commitDates = Object.values(matches)
+      .filter(commit => commit && commit.date)
+      .map(commit => commit.date);
+    const mostRecentCommitDate = commitDates.length > 0 ? Math.max(...commitDates) : null;
+    
+    // Always initialize uncommitted time group
+    grouped['uncommitted'] = {
+      commit: null,
+      sessions: [],
+      isUncommitted: true
+    };
+    
+    // Group sessions by their commit SHA
+    sessions.forEach(session => {
+      const commit = matches[session.start_time];
+      const sessionDate = new Date(session.start_time * 1000);
+      
+      if (commit) {
+        if (!grouped[commit.sha]) {
+          grouped[commit.sha] = {
+            commit,
+            sessions: []
+          };
+        }
+        grouped[commit.sha].sessions.push(session);
+      } else if (mostRecentCommitDate && sessionDate > mostRecentCommitDate) {
+        // Add to uncommitted sessions
+        grouped['uncommitted'].sessions.push(session);
+      } else {
+        // Group unmatched sessions
+        if (!grouped['unmatched']) {
+          grouped['unmatched'] = {
+            commit: null,
+            sessions: []
+          };
+        }
+        grouped['unmatched'].sessions.push(session);
+      }
+    });
+
+    // Convert to array, sort by date, and convert back to object
+    const sortedEntries = Object.entries(grouped).sort((a, b) => {
+      // Put uncommitted at the top
+      if (a[0] === 'uncommitted') return -1;
+      if (b[0] === 'uncommitted') return 1;
+      
+      // Put unmatched at the bottom
+      if (a[0] === 'unmatched') return 1;
+      if (b[0] === 'unmatched') return -1;
+      
+      // Sort by commit date, newest first
+      return b[1].commit.date - a[1].commit.date;
+    });
+
+    // Convert back to object while maintaining order
+    const sortedGrouped = Object.fromEntries(sortedEntries);
+
+    // Verify time totals
+    verifyTimeTotals(sessions, sortedGrouped, projectName);
+
+    return sortedGrouped;
+  };
+
+  // Commit-level select/deselect all
+  const handleCommitSelect = (projectName, commitSha, commitGroup) => {
+    const commitSessionTimes = getCommitSessionTimes(commitGroup);
+    const selectedSet = new Set(selectedSessions[projectName] || []);
+    const allSelected = commitSessionTimes.length > 0 && commitSessionTimes.every(time => selectedSet.has(time));
+
+    if (allSelected) {
+      // Deselect all sessions in this commit
+      const newSelected = [...selectedSet].filter(time => !commitSessionTimes.includes(time));
+      setSelectedSessions(prev => ({
+        ...prev,
+        [projectName]: newSelected
+      }));
+    } else {
+      // Select all sessions in this commit (add, but no duplicates)
+      const newSelected = Array.from(new Set([...selectedSet, ...commitSessionTimes]));
+      setSelectedSessions(prev => ({
+        ...prev,
+        [projectName]: newSelected
+      }));
+    }
+  };
+
+  // Checkbox checked logic
+  const isProjectChecked = (projectName) => {
+    const allSessionTimes = getAllSessionTimes(projectName);
+    const selected = selectedSessions[projectName] || [];
+    return allSessionTimes.length > 0 && selected.length === allSessionTimes.length;
+  };
+
+  const isCommitChecked = (projectName, commitGroup) => {
+    const commitSessionTimes = getCommitSessionTimes(commitGroup);
+    const selectedSet = new Set(selectedSessions[projectName] || []);
+    return commitSessionTimes.length > 0 && commitSessionTimes.every(time => selectedSet.has(time));
+  };
+
+  const renderCommitGroup = (projectName, commitGroup) => {
+    const { commit, sessions, isUncommitted } = commitGroup;
+    const totalDuration = getTotalDuration(sessions);
+    const isUnmatched = !commit && !isUncommitted;
+    const commitSha = commit?.sha || (isUncommitted ? 'uncommitted' : 'unmatched');
+    const isSelected = selectedSessions[projectName]?.some(sessionTime => 
+      sessions.some(s => s.start_time === sessionTime)
+    );
+    
+    return (
+      <div key={commitSha}>
+        <div style={{ display: 'flex', alignItems: 'center', marginBottom: '4px' }}>
+          {!isUncommitted && (
+            <div style={{ marginRight: '12px' }}>
+              <input
+                type="checkbox"
+                checked={isSelected}
+                onChange={() => handleCommitSelect(projectName, commitSha, commitGroup)}
+              />
+            </div>
+          )}
+          <div style={{ flex: 1 }}>
+            {isUncommitted ? (
+              <span style={{ 
+                fontWeight: 500,
+                color: '#ef758a'
+              }}>
+                Uncommitted Time
+              </span>
+            ) : isUnmatched ? (
+              <span style={{ fontWeight: 500 }}>Unmatched Sessions</span>
+            ) : (
+              <a 
+                href={commit.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ 
+                  color: '#ef758a',
+                  textDecoration: 'none',
+                  fontWeight: 500
+                }}
+              >
+                {commit.message}
+              </a>
+            )}
+            <span style={{ color: '#888', marginLeft: 8 }}>({formatDuration(totalDuration)})</span>
+          </div>
+          <div>
+            <button
+              onClick={() => toggleDayDropdown(projectName, commitSha)}
+              style={{
+                padding: '2px 6px',
+                border: '1px solid #ccc',
+                borderRadius: '4px',
+                backgroundColor: 'white',
+                cursor: 'pointer',
+                transform: openedDays[projectName]?.includes(commitSha) ? 'rotate(180deg)' : 'none'
+              }}
+            >
+              ▼
+            </button>
+          </div>
+        </div>
+        {openedDays[projectName]?.includes(commitSha) && (
+          <div style={{ paddingLeft: '24px', marginBottom: '4px' }}>
+            {sessions
+              .slice()
+              .sort((a, b) => b.start_time - a.start_time)
+              .map((session, index) => renderSessionWithCommit(session, projectName))}
+          </div>
+        )}
+      </div>
+    );
   };
 
   // Get total duration for a group of sessions
   const getTotalDuration = (sessions) => {
     return sessions.reduce((sum, s) => sum + s.duration, 0);
+  };
+
+  // Calculate total pending time from selected sessions
+  const calculatePendingTime = () => {
+    let totalSeconds = 0;
+    Object.entries(selectedSessions).forEach(([projectName, sessions]) => {
+      sessions.forEach(sessionTime => {
+        const session = projectSessions[projectName]?.find(s => s.start_time === sessionTime);
+        if (session) {
+          totalSeconds += session.duration;
+        }
+      });
+    });
+    return (totalSeconds / 3600).toFixed(2); // Convert to hours
+  };
+
+  // Update the session display to show commit information
+  const renderSessionWithCommit = (session, projectName) => {
+    const commit = sessionCommitMatches[projectName]?.[session.start_time];
+    const isLoading = isLoadingCommits[projectName];
+    const error = commitFetchErrors[projectName];
+
+    return (
+      <div style={{ 
+        display: 'flex', 
+        alignItems: 'center',
+        marginBottom: '8px'
+      }}>
+        <div style={{ marginRight: '12px' }}>
+          <input 
+            type="checkbox" 
+            checked={selectedSessions[projectName]?.includes(session.start_time) || false}
+            onChange={() => handleSessionSelect(projectName, session.start_time)}
+          />
+        </div>
+        <div style={{ 
+          display: 'flex',
+          alignItems: 'center',
+          gap: '4px',
+          color: '#666',
+          flex: 1,
+          overflow: 'hidden'
+        }}>
+          <span>{formatDate(session.start_time)} - {formatDuration(session.duration)}</span>
+          <span style={{ 
+            marginLeft: '8px', 
+            color: '#ef758a',
+            fontWeight: 'bold',
+            fontSize: '12px'
+          }}>
+            {sessionStatuses[`${projectName}-${session.start_time}`] || '-'}
+          </span>
+          {isLoading ? (
+            <span style={{ color: '#999', fontSize: '12px' }}>(Loading commits...)</span>
+          ) : error ? (
+            <span style={{ color: '#ff4444', fontSize: '12px' }}>(Error: {error})</span>
+          ) : commit ? (
+            <span 
+              style={{
+                color: '#ef758a',
+                textDecoration: 'none',
+                fontSize: '12px',
+                opacity: 0.9,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                marginLeft: '4px'
+              }}
+            >
+              <a 
+                href={commit.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  color: 'inherit',
+                  textDecoration: 'none'
+                }}
+              >
+                ({commit.message})
+              </a>
+            </span>
+          ) : null}
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -329,7 +770,7 @@ const HackTimeComponent = ({ isExiting, onClose }) => {
                 color: '#ef758a',
                 textShadow: '0 1px 2px rgba(0,0,0,0.04)'
               }}>Hackatime (powerful)</p>
-              <p style={{color: '#786951', fontSize: 19}}>Hackatime is a time-logging tool that latches onto into VS Code and automatically feeds on time as you code. <b>Recommended for every serious hacker.</b></p>
+              <p style={{color: '#786951', fontSize: 19}}>Hackatime is a time-logging tool that latches onto into your IDE and automatically feeds on time as you code. <b>Recommended for every serious hacker.</b></p>
             </div>
             <div
               style={{
@@ -418,12 +859,58 @@ const HackTimeComponent = ({ isExiting, onClose }) => {
         </div>
         }
         {timeTrackingMethod == "hackatime" && 
-        <div style={{ color: "#000" }}>
-          <p>check the projects or sessions you'd like to be attributed to neighborhood.</p>
+        <div style={{ color: "#000", padding: 16 }}>
+
+<div style={{
+            display: 'flex',
+            flexDirection: 'row',
+            gap: '24px',
+            padding: '12px',
+            alignItems: 'flex-start',
+            width: '100%',
+            justifyContent: 'space-between',
+            marginBottom: '24px',
+          }}>
+            {[
+              { name: "PENDING TIME", value: `${calculatePendingTime()} hr` },
+              { name: "SHIPPED TIME", value: "0.00 hr" },
+              { name: "APPROVED TIME", value: "0.00 hr" }
+            ].map((category, index) => (
+              <div key={index} style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flex: 1,
+                width: 150,
+                gap: '0px',
+              }}>
+                <span style={{ 
+                  fontSize: '12px', 
+                  fontWeight: 600,
+                  letterSpacing: '-0.5px',
+                  color: '#ef758a',
+                  textAlign: 'left',
+                  textTransform: 'uppercase',
+                }}>{category.name}</span>
+                <span style={{ 
+                  fontSize: '18px', 
+                  color: '#000', 
+                  fontWeight: 600,
+                  textAlign: 'left',
+                }}>{category.value}</span>
+              </div>
+            ))}
+          </div>
+
+
           <div style={{ height: '1px', backgroundColor: '#00000010', margin: '16px 0' }} />
+          <p style={{marginLeft: 0,}}>check the projects or sessions you'd like to be attributed to neighborhood.</p>
+
+
           {projects.map((project) => {
-            const isProjectChecked = selectedProjects.includes(project.name);
-            const grouped = groupSessionsByDay(projectSessions[project.name] || []);
+            const projectChecked = isProjectChecked(project.name);
+            const grouped = groupSessionsByCommit(projectSessions[project.name] || [], project.name);
             const dayKeys = Object.keys(grouped).sort((a, b) => b.localeCompare(a)); // newest first
             // Project total duration
             const projectTotal = getTotalDuration(projectSessions[project.name] || []);
@@ -438,12 +925,28 @@ const HackTimeComponent = ({ isExiting, onClose }) => {
                   <div style={{ marginRight: '12px' }}>
                     <input 
                       type="checkbox" 
-                      checked={isProjectChecked}
+                      checked={projectChecked}
                       onChange={() => handleProjectSelect(project.name)}
                     />
                   </div>
                   <div style={{ flex: 1 }}>
-                    <p style={{ margin: 0 }}>{project.name}{projectTotal > 0 ? ` (${formatDuration(projectTotal)})` : ''}</p>
+                    <p style={{ margin: 0 }}>
+                      {project.name}
+                      {projectTotal > 0 ? ` (${formatDuration(projectTotal)})` : ''}
+                      {githubLinks[project.name] ? ` (${githubLinks[project.name]})` : (
+                        <span 
+                          onClick={() => handleGithubLink(project.name)}
+                          style={{ 
+                            color: '#ef758a', 
+                            cursor: 'pointer', 
+                            marginLeft: '8px',
+                            fontSize: '12px'
+                          }}
+                        >
+                          (Connect GitHub)
+                        </span>
+                      )}
+                    </p>
                   </div>
                   <div>
                     <button 
@@ -463,68 +966,8 @@ const HackTimeComponent = ({ isExiting, onClose }) => {
                 </div>
                 {openedProjects.includes(project.name) && (
                   <div style={{ paddingLeft: '24px', marginBottom: '8px' }}>
-                    {dayKeys.map(dayKey => {
-                      const isDayChecked = isProjectChecked || (selectedDays[project.name]?.includes(dayKey) || false);
-                      const isDayDisabled = isProjectChecked;
-                      const isDayOpen = openedDays[project.name]?.includes(dayKey);
-                      const dayTotal = getTotalDuration(grouped[dayKey]);
-                      return (
-                        <div key={dayKey}>
-                          <div style={{ display: 'flex', alignItems: 'center', marginBottom: '4px' }}>
-                            <div style={{ marginRight: '12px' }}>
-                              <input
-                                type="checkbox"
-                                checked={isDayChecked}
-                                onChange={() => handleDaySelect(project.name, dayKey)}
-                                disabled={isDayDisabled}
-                              />
-                            </div>
-                            <div style={{ flex: 1 }}>
-                              <span style={{ fontWeight: 500 }}>{new Date(dayKey).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
-                              <span style={{ color: '#888', marginLeft: 8 }}>({formatDuration(dayTotal)})</span>
-                            </div>
-                            <div>
-                              <button
-                                onClick={() => toggleDayDropdown(project.name, dayKey)}
-                                style={{
-                                  padding: '2px 6px',
-                                  border: '1px solid #ccc',
-                                  borderRadius: '4px',
-                                  backgroundColor: 'white',
-                                  cursor: 'pointer',
-                                  transform: isDayOpen ? 'rotate(180deg)' : 'none'
-                                }}
-                              >
-                                ▼
-                              </button>
-                            </div>
-                          </div>
-                          {isDayOpen && (
-                            <div style={{ paddingLeft: '24px', marginBottom: '4px' }}>
-                              {grouped[dayKey].map((session, index) => (
-                                <div key={index} style={{ 
-                                  display: 'flex', 
-                                  alignItems: 'center',
-                                  marginBottom: '8px' 
-                                }}>
-                                  <div style={{ marginRight: '12px' }}>
-                                    <input 
-                                      type="checkbox" 
-                                      checked={isProjectChecked || isDayChecked || (selectedSessions[project.name]?.includes(session.start_time) || false)}
-                                      onChange={() => handleSessionSelect(project.name, dayKey, session.start_time)}
-                                      disabled={isProjectChecked || isDayChecked}
-                                    />
-                                  </div>
-                                  <p style={{ margin: 0, color: '#666' }}>
-                                    {formatDate(session.start_time)} - {formatDuration(session.duration)}
-                                  </p>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
+                    {Object.entries(grouped)
+                      .map(([commitSha, commitGroup]) => renderCommitGroup(project.name, commitGroup))}
                   </div>
                 )}
               </div>
@@ -536,6 +979,71 @@ const HackTimeComponent = ({ isExiting, onClose }) => {
           <StopwatchComponent />
         </div>}
       </div>
+      {showGithubInput && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000
+        }}>
+          <div style={{
+            backgroundColor: 'white',
+            padding: '20px',
+            borderRadius: '8px',
+            width: '400px'
+          }}>
+            <h3 style={{ margin: '0 0 16px 0' }}>Connect GitHub Repository</h3>
+            <form onSubmit={handleGithubInputSubmit}>
+              <input
+                type="text"
+                name="githubLink"
+                placeholder="https://github.com/username/repo"
+                style={{
+                  width: '100%',
+                  padding: '8px',
+                  marginBottom: '16px',
+                  border: '1px solid #ccc',
+                  borderRadius: '4px'
+                }}
+              />
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+                <button
+                  type="button"
+                  onClick={() => setShowGithubInput(false)}
+                  style={{
+                    padding: '8px 16px',
+                    border: '1px solid #ccc',
+                    borderRadius: '4px',
+                    backgroundColor: 'white',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  style={{
+                    padding: '8px 16px',
+                    border: 'none',
+                    borderRadius: '4px',
+                    backgroundColor: '#ef758a',
+                    color: 'white',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Connect
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -1,6 +1,6 @@
 export const updateSlackUserData = async (token) => {
   try {
-    const response = await fetch('http://localhost:3001/api/get-user-data', {
+    const response = await fetch('https://neighborhood.hackclub.dev/api/get-user-data', {
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${token}`

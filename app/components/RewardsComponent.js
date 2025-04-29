@@ -26,9 +26,11 @@ const RewardBox = ({ top, left, label, isAccessible, index }) => {
     if (index >= 3 && index <= 7) { // Middle ring (Rewards 4-8)
       const hours = [25, 35, 45, 55, 65];
       return `${hours[index - 3]} hours`;
-    } else if (index >= 8 && index <= 14) { // Bottom ring (Rewards 9-15)
+    } else if (index >= 8 && index <= 13) { // Bottom ring (Rewards 9-14)
       const hours = [70, 75, 80, 85, 90, 95];
       return `${hours[index - 8]} hours`;
+    } else if (index === 14) { // Last before Room Key
+      return "100 hours";
     } else if (index === 15) { // Room Key
       return "100 hours";
     }
