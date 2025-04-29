@@ -193,7 +193,7 @@ export default function Home() {
                     border: "2px solid #786A50",
                     borderRadius: 100,
                     fontSize: "14px",
-                    fontWeight: 600,
+                    fontWeight: 800,
                     fontFamily: "'M PLUS Rounded 1c', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
                     cursor: "pointer",
                     width: "100%"
