@@ -33,6 +33,9 @@ export default function Home() {
         email: email || prev.email,
         birthday: birthday || prev.birthday
       }));
+      if (birthday) {
+        setHasBirthdayFocus(true);
+      }
     }
   }, [router.isReady, router.query]);
 
@@ -82,6 +85,8 @@ export default function Home() {
               <div>
              <input 
                 placeholder="email"
+                value={formData.email}
+                onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
                 style={{
                   padding: "6px 12px",
                   borderRadius: "8px 8px 0px 0px",
@@ -107,6 +112,8 @@ export default function Home() {
               }}>
               <input 
                 placeholder="name"
+                value={formData.name}
+                onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
                 style={{
                   padding: "6px 12px",
                   borderRadius: 0,
@@ -173,77 +180,81 @@ export default function Home() {
                  )}
                </div>
                </div>
-               <button 
-                 style={{
-                   marginTop: "12px",
-                   padding: "12px 24px",
-                   backgroundColor: "#F7D359",
-                   color: "#786A50",
-                   border: "2px solid #786A50",
-                   borderRadius: 100,
-                   fontSize: "14px",
-                   fontWeight: 600,
-                   fontFamily: "'M PLUS Rounded 1c', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
-                   cursor: "pointer",
-                   width: "100%"
-                 }}
-               >
-                Join Us in San Francisco
-               </button>
-              </div>
-
-            </div>
-            <img src="textBubble.svg"/>
-          </div>
-
-        </div>
-        
-        <br/>
-        <div style={{
-                display: "flex", 
-                marginTop: 24,
-                flexDirection: "row", 
-                gap: 12, 
-                alignItems: "center",
-                width: "calc(100%)",
-                justifyContent: "center"
-              }}>
-                <button style={{
-                  backgroundColor: "#FFF9E6", 
-                  display: "flex", 
-                  flexDirection: "row", 
-                  alignItems: "center", 
-                  gap: 8, 
-                  border: "1px solid #786A50", 
-                  color: "#786A50", 
-                  fontWeight: 800, 
-                  borderRadius: 96, 
-                  padding: "4px 16px 4px 4px",
-                }}>
-                  <div style={{height: 24, borderRadius: 16, width: 24, backgroundColor: "#786A50", display: "flex", alignItems: "center", justifyContent: "center"}}>
-                    <img src="/mail.svg" style={{height: 16, width: 16}} />
-                  </div>
-                  Letter to You
+               <div style={{display: "flex", height: 0, justifyContent: "space-between"}}>
+               <p style={{fontSize: 8, fontWeight: 800, color: "#786A50"}}>full name</p>
+               <p style={{fontSize: 8, fontWeight: 800, color: "#786A50"}}>birthday (18yr old & under only)</p>
+               </div>
+                <button 
+                  style={{
+                    marginTop: "12px",
+                    padding: "12px 24px",
+                    backgroundColor: "#F7D359",
+                    color: "#786A50",
+                    border: "2px solid #786A50",
+                    borderRadius: 100,
+                    fontSize: "14px",
+                    fontWeight: 600,
+                    fontFamily: "'M PLUS Rounded 1c', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
+                    cursor: "pointer",
+                    width: "100%"
+                  }}
+                >
+                 Join Us in San Francisco
                 </button>
-                <button style={{
-                  backgroundColor: "#18A69A", 
-                  display: "flex", 
-                  flexDirection: "row", 
-                  alignItems: "center", 
-                  gap: 8, 
-                  border: "1px solid #7CC9C3", 
-                  color: "#FFFBE7", 
-                  fontWeight: 800, 
-                  borderRadius: 96, 
-                  padding: "4px 16px 4px 4px",
-                }}>
-                  <div style={{height: 24, borderRadius: 16, width: 24, backgroundColor: "#FFFBE7", display: "flex", alignItems: "center", justifyContent: "center"}}>
-                    <img src="/song.svg" style={{height: 16, width: 16}} />
-                  </div>
-                  Neighborhood Song
-                </button>
-              </div>
-      </div>
-    </>
-  );
-}
+               </div>
+
+             </div>
+             <img src="textBubble.svg"/>
+           </div>
+
+         </div>
+         
+         <br/>
+         <div style={{
+                 display: "flex", 
+                 marginTop: 24,
+                 flexDirection: "row", 
+                 gap: 12, 
+                 alignItems: "center",
+                 width: "calc(100%)",
+                 justifyContent: "center"
+               }}>
+                   <button style={{
+                     backgroundColor: "#FFF9E6", 
+                     display: "flex", 
+                     flexDirection: "row", 
+                     alignItems: "center", 
+                     gap: 8, 
+                     border: "1px solid #786A50", 
+                     color: "#786A50", 
+                     fontWeight: 800, 
+                     borderRadius: 96, 
+                     padding: "4px 16px 4px 4px",
+                   }}>
+                     <div style={{height: 24, borderRadius: 16, width: 24, backgroundColor: "#786A50", display: "flex", alignItems: "center", justifyContent: "center"}}>
+                       <img src="/mail.svg" style={{height: 16, width: 16}} />
+                     </div>
+                     Letter to You
+                   </button>
+                   <button style={{
+                     backgroundColor: "#18A69A", 
+                     display: "flex", 
+                     flexDirection: "row", 
+                     alignItems: "center", 
+                     gap: 8, 
+                     border: "1px solid #7CC9C3", 
+                     color: "#FFFBE7", 
+                     fontWeight: 800, 
+                     borderRadius: 96, 
+                     padding: "4px 16px 4px 4px",
+                   }}>
+                     <div style={{height: 24, borderRadius: 16, width: 24, backgroundColor: "#FFFBE7", display: "flex", alignItems: "center", justifyContent: "center"}}>
+                       <img src="/song.svg" style={{height: 16, width: 16}} />
+                     </div>
+                     Neighborhood Song
+                   </button>
+                 </div>
+       </div>
+     </>
+   );
+ }
