@@ -39,3 +39,11 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# sensitive configuration files with credentials
+electron-builder.yaml
+forge.config.js
+scripts/complete-build.sh
+scripts/notarize-mac.sh
+notarization.log
+notarization_log.json

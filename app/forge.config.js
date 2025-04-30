@@ -1,44 +1,70 @@
 const { FusesPlugin } = require('@electron-forge/plugin-fuses');
 const { FuseV1Options, FuseVersion } = require('@electron/fuses');
+const path = require('path');
 
 module.exports = {
   packagerConfig: {
     asar: true,
+    prune: true,
+    ignore: [
+      "^/node_modules/.cache",
+      "^/temp-electron-deps",
+      "^/.git",
+      "^/.github",
+      "^/.next",
+      "^/.vercel",
+      "^/out",
+      ".map$"
+    ],
+    osxSign: {
+      identity: "Developer ID Application: Thomas Stubblefield (2H4LMN3ZLG)",
+      hardenedRuntime: true,
+      entitlements: path.resolve(__dirname, 'entitlements.plist'),
+      entitlementsInherit: path.resolve(__dirname, 'entitlements.plist'),
+      'gatekeeper-assess': false
+    },
+    osxNotarize: {
+      tool: 'notarytool',
+      appleId: process.env.APPLE_ID,
+      appleIdPassword: process.env.APPLE_ID_PASSWORD,
+      teamId: process.env.APPLE_TEAM_ID
+    },
+    extraResource: [path.resolve(__dirname, 'entitlements-minimal.plist')]
   },
   rebuildConfig: {},
   makers: [
     {
-      name: '@electron-forge/maker-squirrel',
-      config: {},
+      name: '@electron-forge/maker-zip',
+      platforms: ['darwin', 'linux', 'win32']
     },
     {
-      name: '@electron-forge/maker-zip',
-      platforms: ['darwin'],
+      name: '@electron-forge/maker-squirrel',
+      config: {
+        name: 'Neighborhood'
+      }
     },
     {
       name: '@electron-forge/maker-deb',
-      config: {},
+      config: {}
     },
     {
       name: '@electron-forge/maker-rpm',
-      config: {},
-    },
+      config: {}
+    }
   ],
   plugins: [
     {
       name: '@electron-forge/plugin-auto-unpack-natives',
-      config: {},
+      config: {}
     },
-    // Fuses are used to enable/disable various Electron functionality
-    // at package time, before code signing the application
     new FusesPlugin({
       version: FuseVersion.V1,
       [FuseV1Options.RunAsNode]: false,
-      [FuseV1Options.EnableCookieEncryption]: true,
+      [FuseV1Options.EnableCookieEncryption]: false,
       [FuseV1Options.EnableNodeOptionsEnvironmentVariable]: false,
       [FuseV1Options.EnableNodeCliInspectArguments]: false,
       [FuseV1Options.EnableEmbeddedAsarIntegrityValidation]: true,
-      [FuseV1Options.OnlyLoadAppFromAsar]: true,
-    }),
-  ],
-};
+      [FuseV1Options.OnlyLoadAppFromAsar]: true
+    })
+  ]
+}; 

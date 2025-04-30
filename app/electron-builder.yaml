@@ -9,4 +9,15 @@ linux:
   icon: "resources/icon.png"
 mac:
   target: ["dir", "dmg", "zip"]
-  icon: "resources/icon.icns" 
+  icon: "resources/icon.icns"
+  hardenedRuntime: true
+  entitlements: "entitlements.plist"
+  entitlementsInherit: "entitlements.plist"
+  identity: "Developer ID Application: Thomas Stubblefield (2H4LMN3ZLG)"
+  gatekeeperAssess: false
+  enableKeychain: false
+  useCacheDirectories: true
+  notarize:
+    teamId: "${process.env.APPLE_TEAM_ID}"
+    appleId: "${process.env.APPLE_ID}"
+    appleIdPassword: "${process.env.APPLE_ID_PASSWORD}" 
