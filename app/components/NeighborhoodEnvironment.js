@@ -175,7 +175,7 @@ export default function NeighborhoodEnvironment({ hasEnteredNeighborhood, setHas
     
     // Add fog that matches sky color for smooth distance fading
     const fogColor = new THREE.Color(0x88d7ee);
-    scene.fog = new THREE.Fog(fogColor, 20, 50); // Start fading at 20 units, complete fade by 50 units
+    scene.fog = new THREE.Fog(fogColor, 80, 140); // Start fading at 20 units, complete fade by 50 units
     
     // Create a container for the camera and player
     const container = new THREE.Object3D();
@@ -246,11 +246,44 @@ export default function NeighborhoodEnvironment({ hasEnteredNeighborhood, setHas
     const maploader = new GLTFLoader();
     maploader.setPath('/models/');
 
+<<<<<<< Updated upstream
     // Modify the map loading to create a trimesh collider
     maploader.load('sf_map_3.glb', function (gltf) {
       mapModel = gltf.scene;
       mapModel.scale.set(2.0, 2.0, 2.0);
       scene.add(gltf.scene);
+=======
+    //load map
+    maploader.load( 'sf_map_3.glb', function ( gltf ) {
+      mapModel = gltf.scene
+      mapModel.scale.set(3.0, 3.0, 3.0);
+      mapModel.position.set(0.0, -0.01, 0.0)
+      scene.add( gltf.scene );
+      // Add toon shading to existing materials
+      //THREE.ColorManagement.legacyMode = false
+      mapModel.traverse((child) => {
+        if (child.isMesh) {
+          const originalMaterial = child.material;
+          // Create a new toon material that preserves the original textures
+          const toonMaterial = new THREE.MeshToonMaterial({
+            map: originalMaterial.map,
+            normalMap: originalMaterial.normalMap,
+            gradientMap: createToonGradient(),
+            side: THREE.DoubleSide,
+            color: originalMaterial.color,
+            transparent: originalMaterial.transparent,
+            opacity: originalMaterial.opacity
+          });
+          child.material = toonMaterial;
+        }
+      });
+    
+    }, undefined, function ( error ) {
+    
+      console.error( error );
+    
+    } );
+>>>>>>> Stashed changes
 
       // Collect all vertices and indices for the trimesh
       const vertices = [];
