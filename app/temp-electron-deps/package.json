@@ -1,0 +1,9 @@
+{
+  "name": "electron-deps",
+  "private": true,
+  "dependencies": {
+    "electron-serve": "^2.1.1",
+    "electron-store": "^10.0.1",
+    "electron-squirrel-startup": "^1.0.1"
+  }
+}

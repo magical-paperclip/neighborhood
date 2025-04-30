@@ -4,7 +4,8 @@ const path = require("path");
 const fs = require('fs');
 
 const appServe = app.isPackaged ? serve({
-  directory: path.join(__dirname, "../out")
+  directory: path.join(__dirname, "../out"),
+  scheme: 'app'
 }) : null;
 
 // Get the path to store our data

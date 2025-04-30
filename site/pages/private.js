@@ -12,6 +12,8 @@ export default function Home() {
     birthday: ""
   });
   const [hasBirthdayFocus, setHasBirthdayFocus] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState("");
 
   const bounceKeyframes = `
     @keyframes gentleBounce {
@@ -38,6 +40,49 @@ export default function Home() {
       }
     }
   }, [router.isReady, router.query]);
+
+  const handleSubmit = async () => {
+    setIsSubmitting(true);
+    setError("");
+
+    try {
+      const response = await fetch('/api/firstTimeNewUser', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: formData.email,
+          fullName: formData.name,
+          birthday: formData.birthday
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+
+        throw new Error(data.message || 'Something went wrong');
+        
+        return;
+      }
+
+      // Handle successful registration
+      alert('Successfully registered! Welcome to the neighborhood!');
+      // Optionally redirect or clear form
+      setFormData({
+        name: "",
+        email: "",
+        birthday: ""
+      });
+      setHasBirthdayFocus(false);
+      
+    } catch (err) {
+      setError(err.message || 'Failed to register. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   return (
     <>
@@ -185,22 +230,34 @@ export default function Home() {
                <p style={{fontSize: 8, fontWeight: 800, color: "#786A50"}}>birthday (18yr old & under only)</p>
                </div>
                 <button 
+                  onClick={handleSubmit}
+                  disabled={isSubmitting || !formData.email || !formData.name || !formData.birthday}
                   style={{
                     marginTop: "12px",
                     padding: "12px 24px",
-                    backgroundColor: "#F7D359",
-                    color: "#786A50",
+                    backgroundColor: isSubmitting ? "#18A69A" : "#F7D359",
+                    color: isSubmitting ? "#FBFBE6" : "#786A50",
                     border: "2px solid #786A50",
                     borderRadius: 100,
                     fontSize: "14px",
                     fontWeight: 800,
                     fontFamily: "'M PLUS Rounded 1c', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
-                    cursor: "pointer",
+                    cursor: isSubmitting ? "not-allowed" : "pointer",
                     width: "100%"
                   }}
                 >
-                 Join Us in San Francisco
+                 {isSubmitting ? 'Joining...' : 'Join Us in San Francisco'}
                 </button>
+                {error && (
+                  <p style={{
+                    color: "#ff4444",
+                    fontSize: "12px",
+                    marginTop: "8px",
+                    textAlign: "center"
+                  }}>
+                    {error}
+                  </p>
+                )}
                </div>
 
              </div>
@@ -210,6 +267,7 @@ export default function Home() {
          </div>
          
          <br/>
+         {/* PLEASE UNIVERSE DO NOT DELETE THESE BUTTONS  */}
          <div style={{
                  display: "flex", 
                  marginTop: 24,

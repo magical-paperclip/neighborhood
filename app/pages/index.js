@@ -70,9 +70,12 @@ export default function Home() {
 
   const menuItems = [
     { id: 'start', text: 'Start Hacking' },
+    { id: 'challenges', text: 'Challenges' },
     { id: 'bulletin', text: 'Bulletin' },
-    { id: 'journal', text: 'Journal' },
-    { id: 'rewards', text: 'Rewards' }
+    { id: 'houses', text: 'Houses' },
+
+    // { id: 'journal', text: 'Journal' },
+    // { id: 'rewards', text: 'Rewards' }
   ];
 
   return (

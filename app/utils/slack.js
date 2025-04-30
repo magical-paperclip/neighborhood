@@ -18,7 +18,7 @@ export const updateSlackUserData = async (token) => {
         }
         window.location.reload();
       }
-      // throw new Error('Failed to update Slack user data');
+      throw new Error('Failed to update Slack user data');
     }
 
     return await response.json();
