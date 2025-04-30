@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
+import * as RAPIER from '@dimforge/rapier3d-compat';
 
 // Function to create a toon gradient texture
 function createToonGradient() {
@@ -42,6 +43,9 @@ export default function NeighborhoodEnvironment({ hasEnteredNeighborhood, setHas
   const mixerRef = useRef(null);
   const currentActionRef = useRef(null);
   const animationsRef = useRef(null);
+  const worldRef = useRef(null);
+  const playerRigidBodyRef = useRef(null);
+  const playerDebugMeshRef = useRef(null);
   const keysRef = useRef({
     w: false,
     a: false,
@@ -52,8 +56,101 @@ export default function NeighborhoodEnvironment({ hasEnteredNeighborhood, setHas
     escape: false
   });
 
+  // Add mouse control state
+  const mouseRef = useRef({
+    sensitivity: 0.005,
+    pitch: 0,
+    yaw: 0,
+    distance: 25,
+    targetHeight: 4,
+    isLocked: false,
+    minDistance: 8
+  });
+
+  const handleMouseMove = (event) => {
+    if (!hasEnteredNeighborhood) return;
+
+    const { sensitivity } = mouseRef.current;
+    
+    // Update yaw and pitch based on mouse movement (inverted Y)
+    mouseRef.current.yaw -= event.movementX * sensitivity;
+    mouseRef.current.pitch -= event.movementY * sensitivity; // Inverted Y-axis
+    
+    // Allow full 360-degree rotation
+    if (mouseRef.current.yaw > Math.PI) mouseRef.current.yaw -= Math.PI * 2;
+    if (mouseRef.current.yaw < -Math.PI) mouseRef.current.yaw += Math.PI * 2;
+
+    console.log('Mouse movement:', {
+      movementX: event.movementX,
+      movementY: event.movementY,
+      yaw: mouseRef.current.yaw,
+      pitch: mouseRef.current.pitch
+    });
+  };
+
+  const handlePointerLockChange = () => {
+    mouseRef.current.isLocked = document.pointerLockElement === containerRef.current;
+    console.log('Pointer lock changed:', mouseRef.current.isLocked);
+  };
+
+  const handleClick = () => {
+    console.log('Click detected, attempting to request pointer lock');
+    if (hasEnteredNeighborhood) {
+      containerRef.current?.requestPointerLock();
+    }
+  };
+
   useEffect(() => {
     if (typeof window === 'undefined') return;
+
+    // Initialize Rapier physics
+    const initPhysics = async () => {
+      await RAPIER.init();
+      
+      // Create physics world
+      const gravity = new RAPIER.Vector3(0.0, -9.81, 0.0);
+      const world = new RAPIER.World(gravity);
+      worldRef.current = world;
+
+      // Create ground collider
+      const groundColliderDesc = RAPIER.ColliderDesc.cuboid(500.0, 0.1, 500.0);
+      world.createCollider(groundColliderDesc);
+
+      // Create player rigid body with improved collision properties
+      const playerRigidBodyDesc = RAPIER.RigidBodyDesc.dynamic()
+        .setTranslation(0.0, 2.0, 0.0)
+        .setLinearDamping(0.1)
+        .setAngularDamping(0.5)
+        .lockRotations()
+        .setCcdEnabled(true)
+        .setGravityScale(1.0);
+      const playerRigidBody = world.createRigidBody(playerRigidBodyDesc);
+      const playerColliderDesc = RAPIER.ColliderDesc.capsule(0.25, 0.5)
+        .setFriction(0.0)
+        .setRestitution(0.0)
+        .setDensity(1.0)
+        .setCollisionGroups(0x00010001)
+        .setSolverGroups(0x00010001)
+        .setActiveCollisionTypes(RAPIER.ActiveCollisionTypes.DEFAULT)
+        .setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS);
+      world.createCollider(playerColliderDesc, playerRigidBody);
+      playerRigidBodyRef.current = playerRigidBody;
+
+      // Create debug visualization for player collider
+      const playerDebugGeometry = new THREE.CapsuleGeometry(0.25, 1.0, 4, 8);
+      const playerDebugMaterial = new THREE.MeshBasicMaterial({ 
+        color: 0xff0000, 
+        wireframe: true,
+        transparent: true,
+        opacity: 0.8 // Increased opacity for better visibility
+      });
+      const playerDebugMesh = new THREE.Mesh(playerDebugGeometry, playerDebugMaterial);
+      playerDebugMesh.position.y = 2.0; // Match initial player position
+      scene.add(playerDebugMesh);
+      playerDebugMeshRef.current = playerDebugMesh;
+    };
+
+    initPhysics();
 
     // Camera settings
     const cameraSettings = {
@@ -149,18 +246,71 @@ export default function NeighborhoodEnvironment({ hasEnteredNeighborhood, setHas
     const maploader = new GLTFLoader();
     maploader.setPath('/models/');
 
-    //load map
-    maploader.load( 'sf_map_3.glb', function ( gltf ) {
-      mapModel = gltf.scene
+    // Modify the map loading to create a trimesh collider
+    maploader.load('sf_map_3.glb', function (gltf) {
+      mapModel = gltf.scene;
       mapModel.scale.set(2.0, 2.0, 2.0);
-      scene.add( gltf.scene );
-    
-    }, undefined, function ( error ) {
-    
-      console.error( error );
-    
-    } );
+      scene.add(gltf.scene);
 
+      // Collect all vertices and indices for the trimesh
+      const vertices = [];
+      const indices = [];
+      let indexOffset = 0;
+
+      mapModel.traverse((child) => {
+        if (child.isMesh) {
+          const geometry = child.geometry;
+          
+          // Apply the mesh's world matrix to get correct position
+          child.updateWorldMatrix(true, true);
+          const worldMatrix = child.matrixWorld;
+          
+          // Get position attribute
+          const positionAttribute = geometry.getAttribute('position');
+          
+          // Add vertices
+          for (let i = 0; i < positionAttribute.count; i++) {
+            const vertex = new THREE.Vector3();
+            vertex.fromBufferAttribute(positionAttribute, i);
+            vertex.applyMatrix4(worldMatrix);
+            vertices.push(vertex.x, vertex.y, vertex.z);
+          }
+          
+          // Add indices
+          if (geometry.index) {
+            const indexArray = geometry.index.array;
+            for (let i = 0; i < indexArray.length; i++) {
+              indices.push(indexArray[i] + indexOffset);
+            }
+          } else {
+            // If no indices, create them
+            for (let i = 0; i < positionAttribute.count; i++) {
+              indices.push(i + indexOffset);
+            }
+          }
+          
+          indexOffset += positionAttribute.count;
+        }
+      });
+
+      // Create trimesh collider
+      if (vertices.length > 0 && indices.length > 0) {
+        const trimeshDesc = RAPIER.ColliderDesc.trimesh(
+          new Float32Array(vertices),
+          new Uint32Array(indices)
+        );
+        
+        // Create static rigid body for the collider
+        const rigidBodyDesc = RAPIER.RigidBodyDesc.fixed();
+        const rigidBody = worldRef.current.createRigidBody(rigidBodyDesc);
+        worldRef.current.createCollider(trimeshDesc, rigidBody);
+
+        // Debug: Log trimesh creation
+        console.log('Created trimesh collider with', vertices.length / 3, 'vertices and', indices.length / 3, 'triangles');
+      }
+    }, undefined, function (error) {
+      console.error(error);
+    });
 
     // Load player model with materials
     const gltfLoader = new GLTFLoader();
@@ -225,8 +375,8 @@ export default function NeighborhoodEnvironment({ hasEnteredNeighborhood, setHas
 
     // Movement settings
     const movementSettings = {
-      moveSpeed: 0.05,
-      sprintSpeed: 0.1,
+      moveSpeed: 0.1,
+      sprintSpeed: 0.2,
       rotationSpeed: 0.02,
       jumpHeight: 0.5,
       gravity: 0.015
@@ -243,26 +393,65 @@ export default function NeighborhoodEnvironment({ hasEnteredNeighborhood, setHas
     const handleKeyDown = (event) => {
       if (!hasEnteredNeighborhood) return;
       
+      if (!playerRigidBodyRef.current) return;
+
+      // Add escape key handling for pointer lock
+      if (event.key.toLowerCase() === 'escape') {
+        document.exitPointerLock();
+        keysRef.current.escape = true;
+        setHasEnteredNeighborhood(false);
+        return;
+      }
+
+      const moveSpeed = keysRef.current.shift ? movementSettings.sprintSpeed : movementSettings.moveSpeed;
+      const currentVelocity = playerRigidBodyRef.current.linvel();
+      let newVelocity = new RAPIER.Vector3(currentVelocity.x, currentVelocity.y, currentVelocity.z);
+
+      // Get the forward direction based on camera rotation
+      const forward = new THREE.Vector3(0, 0, -1);
+      forward.applyQuaternion(camera.quaternion);
+      forward.y = 0;
+      forward.normalize();
+
+      // Get the right direction
+      const right = new THREE.Vector3(1, 0, 0);
+      right.applyQuaternion(camera.quaternion);
+      right.y = 0;
+      right.normalize();
+
+      // Update container rotation to match camera direction
+      const targetRotation = Math.atan2(forward.x, forward.z);
+      container.rotation.y = targetRotation;
+
       switch (event.key.toLowerCase()) {
         case 'w':
           keysRef.current.w = true;
+          newVelocity.x = forward.x * moveSpeed * 50;
+          newVelocity.z = forward.z * moveSpeed * 50;
           break;
         case 'a':
           keysRef.current.a = true;
+          newVelocity.x = -right.x * moveSpeed * 50;
+          newVelocity.z = -right.z * moveSpeed * 50;
           break;
         case 's':
           keysRef.current.s = true;
+          newVelocity.x = -forward.x * moveSpeed * 50;
+          newVelocity.z = -forward.z * moveSpeed * 50;
           break;
         case 'd':
           keysRef.current.d = true;
+          newVelocity.x = right.x * moveSpeed * 50;
+          newVelocity.z = right.z * moveSpeed * 50;
           break;
         case 'shift':
           keysRef.current.shift = true;
           break;
         case ' ':
           if (!jumpState.isJumping) {
+            // Apply upward velocity for jump
+            newVelocity.y = movementSettings.jumpHeight * 20;
             jumpState.isJumping = true;
-            jumpState.jumpVelocity = movementSettings.jumpHeight;
           }
           keysRef.current.space = true;
           break;
@@ -271,21 +460,33 @@ export default function NeighborhoodEnvironment({ hasEnteredNeighborhood, setHas
           setHasEnteredNeighborhood(false);
           break;
       }
+
+      // Apply the new velocity
+      playerRigidBodyRef.current.setLinvel(newVelocity, true);
     };
 
     const handleKeyUp = (event) => {
+      if (!playerRigidBodyRef.current) return;
+
+      const currentVelocity = playerRigidBodyRef.current.linvel();
+      let newVelocity = new RAPIER.Vector3(currentVelocity.x, currentVelocity.y, currentVelocity.z);
+
       switch (event.key.toLowerCase()) {
         case 'w':
           keysRef.current.w = false;
+          if (!keysRef.current.s) newVelocity.z = 0;
           break;
         case 'a':
           keysRef.current.a = false;
+          if (!keysRef.current.d) newVelocity.x = 0;
           break;
         case 's':
           keysRef.current.s = false;
+          if (!keysRef.current.w) newVelocity.z = 0;
           break;
         case 'd':
           keysRef.current.d = false;
+          if (!keysRef.current.a) newVelocity.x = 0;
           break;
         case 'shift':
           keysRef.current.shift = false;
@@ -297,7 +498,23 @@ export default function NeighborhoodEnvironment({ hasEnteredNeighborhood, setHas
           keysRef.current.escape = false;
           break;
       }
+
+      // Apply the new velocity
+      playerRigidBodyRef.current.setLinvel(newVelocity, true);
     };
+
+    // Add event listeners for mouse controls
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('pointerlockchange', handlePointerLockChange);
+    document.addEventListener('pointerlockerror', (error) => {
+      console.error('Pointer lock error:', error);
+    });
+    
+    // Add click handler to the container
+    if (containerRef.current) {
+      containerRef.current.style.cursor = 'pointer';
+      containerRef.current.addEventListener('click', handleClick);
+    }
 
     // Handle window resize
     const handleResize = () => {
@@ -306,10 +523,92 @@ export default function NeighborhoodEnvironment({ hasEnteredNeighborhood, setHas
       renderer.setSize(window.innerWidth, window.innerHeight);
     };
 
+    // Create raycaster for camera collision detection
+    const raycaster = new THREE.Raycaster();
+
     // Animation
     const animate = (timestamp) => {
       if (!startTimeRef.current) startTimeRef.current = timestamp;
       const progress = Math.min((timestamp - startTimeRef.current) / 1000, 1);
+      
+      // Update physics world
+      if (worldRef.current) {
+        // Step physics
+        worldRef.current.step();
+        
+        // Update player position based on physics
+        if (playerRigidBodyRef.current && playerRef.current) {
+          const position = playerRigidBodyRef.current.translation();
+          const velocity = playerRigidBodyRef.current.linvel();
+          
+          // Update container position (including player mesh)
+          container.position.set(position.x, position.y, position.z);
+          
+          // Update debug mesh position
+          if (playerDebugMeshRef.current) {
+            playerDebugMeshRef.current.position.set(position.x, position.y + 0.5, position.z);
+          }
+
+          // Update third-person camera position
+          const { distance, targetHeight, pitch, yaw, minDistance } = mouseRef.current;
+          
+          // Calculate desired camera position
+          const cameraOffset = new THREE.Vector3(
+            -Math.sin(yaw) * Math.cos(pitch) * distance,
+            targetHeight + Math.sin(pitch) * distance,
+            -Math.cos(yaw) * Math.cos(pitch) * distance
+          );
+
+          // Player position with height offset for camera target
+          const playerPos = new THREE.Vector3(
+            position.x,
+            position.y + targetHeight * 0.5,
+            position.z
+          );
+
+          // Calculate desired camera position
+          const desiredCameraPos = new THREE.Vector3(
+            playerPos.x + cameraOffset.x,
+            playerPos.y + cameraOffset.y,
+            playerPos.z + cameraOffset.z
+          );
+
+          // Cast ray from player to desired camera position
+          const rayDirection = desiredCameraPos.clone().sub(playerPos).normalize();
+          const rayLength = desiredCameraPos.distanceTo(playerPos);
+          raycaster.set(playerPos, rayDirection);
+
+          // Check for intersections with all objects in the scene
+          const intersects = raycaster.intersectObjects(scene.children, true);
+
+          // Find the closest valid intersection
+          let closestIntersection = null;
+          for (const intersection of intersects) {
+            // Skip player model and debug mesh
+            if (intersection.object === playerRef.current || 
+                intersection.object === playerDebugMeshRef.current ||
+                intersection.object === plane) {
+              continue;
+            }
+            closestIntersection = intersection;
+            break;
+          }
+
+          // Adjust camera position if there's a collision
+          if (closestIntersection && closestIntersection.distance < rayLength) {
+            // Place camera slightly in front of the collision point
+            const adjustedDistance = Math.max(minDistance, closestIntersection.distance - 0.5);
+            const adjustedOffset = rayDirection.multiplyScalar(adjustedDistance);
+            camera.position.copy(playerPos).add(adjustedOffset);
+          } else {
+            // No collision, use desired position
+            camera.position.copy(desiredCameraPos);
+          }
+          
+          // Look at player
+          camera.lookAt(playerPos);
+        }
+      }
       
       // Update animation mixer
       if (mixerRef.current && animationsRef.current) {
@@ -340,140 +639,6 @@ export default function NeighborhoodEnvironment({ hasEnteredNeighborhood, setHas
         }
       }
       
-      // Smooth easing
-      const eased = progress < .5 ? 
-        4 * progress * progress * progress : 
-        1 - Math.pow(-2 * progress + 2, 3) / 2;
-
-      if (hasEnteredNeighborhood) {
-        // Update container position and rotation based on keys
-        if (playerRef.current) {
-          const { moveSpeed, sprintSpeed, rotationSpeed, gravity } = movementSettings;
-          const cameraOffset = cameraSettings.end.offset;
-          
-          // Interpolate FOV
-          camera.fov = THREE.MathUtils.lerp(
-            cameraSettings.start.fov,
-            cameraSettings.end.fov,
-            eased
-          );
-          camera.updateProjectionMatrix(); // Important: must call this after changing FOV
-
-          // Handle rotation with A and D
-          if (keysRef.current.a) {
-            container.rotation.y += rotationSpeed;
-          }
-          if (keysRef.current.d) {
-            container.rotation.y -= rotationSpeed;
-          }
-
-          // Calculate forward direction based on rotation
-          const forward = new THREE.Vector3(0, 0, 1);
-          forward.applyQuaternion(container.quaternion);
-
-          // Handle forward/backward movement with W and S
-          const currentSpeed = keysRef.current.shift ? sprintSpeed : moveSpeed;
-          if (keysRef.current.w) {
-            container.position.add(forward.multiplyScalar(currentSpeed));
-          }
-          if (keysRef.current.s) {
-            container.position.add(forward.multiplyScalar(-currentSpeed));
-          }
-
-          // Handle jumping
-          if (jumpState.isJumping) {
-            container.position.y += jumpState.jumpVelocity;
-            jumpState.jumpVelocity -= gravity;
-            
-            // Check if landed (accounting for cube height)
-            if (container.position.y <= jumpState.groundY) {
-              container.position.y = jumpState.groundY;
-              jumpState.isJumping = false;
-              jumpState.jumpVelocity = 0;
-            }
-          }
-
-          // Update camera position relative to container
-          if (progress === 1) {
-            // Position camera behind player based on container's rotation
-            const cameraAngle = container.rotation.y;
-            const distance = 6;
-            const height = 3;
-            
-            // Position camera directly behind player
-            camera.position.set(
-              container.position.x - Math.sin(cameraAngle) * distance,
-              container.position.y + height,
-              container.position.z - Math.cos(cameraAngle) * distance
-            );
-            
-            // Look ahead of player
-            const lookAtTarget = new THREE.Vector3(
-              container.position.x + Math.sin(cameraAngle) * gameplayLookAtOffset.z,
-              container.position.y + gameplayLookAtOffset.y,
-              container.position.z + Math.cos(cameraAngle) * gameplayLookAtOffset.z
-            );
-            camera.lookAt(lookAtTarget);
-          } else {
-            // During transition
-            const currentPosition = new THREE.Vector3();
-            currentPosition.lerpVectors(
-              cameraSettings.start.position,
-              new THREE.Vector3(
-                container.position.x - Math.sin(container.rotation.y) * 4,
-                container.position.y + 4, // Match the new height
-                container.position.z - Math.cos(container.rotation.y) * 4
-              ),
-              eased
-            );
-            camera.position.copy(currentPosition);
-            
-            // Smoothly transition the look target
-            const startLookAt = cameraSettings.start.lookAt;
-            const endLookAt = new THREE.Vector3(
-              container.position.x,
-              container.position.y + 0.5, // Match the new look target
-              container.position.z
-            );
-            const currentLookAt = new THREE.Vector3();
-            currentLookAt.lerpVectors(startLookAt, endLookAt, eased);
-            camera.lookAt(currentLookAt);
-          }
-        }
-      } else {
-        // Reset player and camera positions when exiting
-        if (playerRef.current) {
-          playerRef.current.position.set(0, 0, 0);
-        }
-        
-        if (container) {
-          container.position.set(0, 0, 0);
-          container.rotation.set(0, 0, 0);
-        }
-        
-        // Transition camera back to starting position
-        const currentPosition = new THREE.Vector3();
-        currentPosition.lerpVectors(
-          new THREE.Vector3(
-            - Math.sin(container.rotation.y) * 4,
-            4, // Updated height
-            - Math.cos(container.rotation.y) * 4
-          ), 
-          cameraSettings.start.position, 
-          eased
-        );
-        camera.position.copy(currentPosition);
-        
-        // Transition look target
-        const currentLookAt = new THREE.Vector3();
-        currentLookAt.lerpVectors(
-          new THREE.Vector3(0, 0.5, 0), // Updated target height
-          cameraSettings.start.lookAt, 
-          eased
-        );
-        camera.lookAt(currentLookAt);
-      }
-      
       renderer.render(scene, camera);
       animationRef.current = requestAnimationFrame(animate);
     };
@@ -495,13 +660,13 @@ export default function NeighborhoodEnvironment({ hasEnteredNeighborhood, setHas
       window.removeEventListener('resize', handleResize);
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('pointerlockchange', handlePointerLockChange);
+      document.removeEventListener('pointerlockerror', () => {});
+      if (containerRef.current) {
+        containerRef.current.removeEventListener('click', handleClick);
+      }
       
-      if (animationRef.current) {
-        cancelAnimationFrame(animationRef.current);
-      }
-      if (mixerRef.current) {
-        mixerRef.current.stopAllAction();
-      }
       if (containerRef.current && renderer.domElement) {
         containerRef.current.removeChild(renderer.domElement);
       }
@@ -521,6 +686,11 @@ export default function NeighborhoodEnvironment({ hasEnteredNeighborhood, setHas
       plane.geometry.dispose();
       plane.material.dispose();
       renderer.dispose();
+      
+      // Cleanup physics
+      if (worldRef.current) {
+        worldRef.current.free();
+      }
     };
   }, [hasEnteredNeighborhood]);
 
@@ -533,8 +703,10 @@ export default function NeighborhoodEnvironment({ hasEnteredNeighborhood, setHas
         left: 0, 
         width: '100%', 
         height: '100%', 
-        zIndex: -1
+        zIndex: -1,
+        cursor: 'pointer'
       }}
+      onClick={handleClick}
     />
   );
 } 
