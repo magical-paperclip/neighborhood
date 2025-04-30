@@ -1,185 +1,93 @@
-import React, { useRef, useEffect } from 'react';
-import * as THREE from 'three';
+import { Canvas, useFrame, useThree } from '@react-three/fiber'
+import { useMemo } from 'react'
+import * as THREE from 'three'
 
-const ShaderBackground = () => {
-  const containerRef = useRef();
-  const rendererRef = useRef();
-  const sceneRef = useRef();
-  const cameraRef = useRef();
+function GridShaderMaterial() {
+  const { viewport } = useThree()
+  
+  const uniforms = useMemo(
+    () => ({
+      uTime: { value: 0 },
+      uColor1: { value: new THREE.Color('#FFF9E6') },  // Background color
+      uColor2: { value: new THREE.Color('#007C74') },  // Grid line color
+      uResolution: { value: new THREE.Vector2() },
+      uGridSize: { value: 20.0 }      // Grid size
+    }),
+    []
+  )
 
-  useEffect(() => {
-    // Initialize Three.js
-    const container = containerRef.current;
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-    renderer.setSize(container.clientWidth, container.clientHeight);
-    container.appendChild(renderer.domElement);
-    rendererRef.current = renderer;
+  useFrame((state) => {
+    uniforms.uTime.value = state.clock.elapsedTime;
+    uniforms.uResolution.value.set(state.size.width, state.size.height);
+  })
 
-    const scene = new THREE.Scene();
-    sceneRef.current = scene;
-
-    const camera = new THREE.OrthographicCamera(
-      -1, 1, 1, -1, 0.1, 10
-    );
-    camera.position.z = 1;
-    cameraRef.current = camera;
-
-    // Create shader material
-    const shaderMaterial = new THREE.ShaderMaterial({
-      uniforms: {
-        iTime: { value: 0 },
-        iResolution: { value: new THREE.Vector3() },
-        iScale: { value: 1.0 },
-        iZoom: { value: 5.5 } // Zoom factor
-      },
-      vertexShader: `
+  return (
+    <shaderMaterial
+      uniforms={uniforms}
+      vertexShader={`
         varying vec2 vUv;
         void main() {
           vUv = uv;
-          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+          gl_Position = vec4(position, 1.0);
         }
-      `,
-      fragmentShader: `
-        uniform float iTime;
-        uniform vec3 iResolution;
-        uniform float iScale;
-        uniform float iZoom;
+      `}
+      fragmentShader={`
+        uniform vec3 uColor1;
+        uniform vec3 uColor2;
+        uniform float uGridSize;
+        uniform vec2 uResolution;
+        uniform float uTime;
         varying vec2 vUv;
 
-        #define COL_FREQ 1.0
-        #define RGB_SHIFT vec3(0, 1, 2)
-        #define OPACITY 0.1
-        #define PERSPECTIVE 1.0
-        #define STEPS 100.0
-        #define Z_SPEED 1.0
-        #define TWIST 2.1
-
-        float happy_star(vec2 uv, float anim) {
-          uv = abs(uv);
-          vec2 pos = min(uv.xy/uv.yx, anim);
-          float p = (2.0 - pos.x - pos.y);
-          return (2.0+p*(p*p-1.5)) / (uv.x+uv.y);      
+        float grid(vec2 coord, float lineWidth) {
+          vec2 grid = fract(coord);
+          vec2 edges = smoothstep(0.0, lineWidth, grid) * 
+                      (1.0 - smoothstep(1.0 - lineWidth, 1.0, grid));
+          return max(edges.x, edges.y);
         }
 
         void main() {
-          // Calculate aspect ratio and center UV coordinates
-          float aspect = iResolution.x / iResolution.y;
-          vec2 uv = (vUv - 0.5) * 2.0;
-          uv.x *= aspect;
+          vec2 coord = vUv;
+          float aspect = uResolution.x / uResolution.y;
+          coord.x *= aspect;
           
-          // Apply zoom and scale
-          uv *= iZoom;
-          uv *= iScale;
+          // Add movement based on time (slow)
+          coord += uTime * 0.01;
           
-          vec2 res = iResolution.xy;
-          vec3 dir = normalize(vec3(uv, -PERSPECTIVE));
+          // Create grid with outlines
+          float lineWidth = 0.05; // Adjust this value to change outline thickness
+          float pattern = grid(coord * uGridSize, lineWidth);
           
-          vec3 col = vec3(0.0);
-          float z = 0.0;
-          float d = 0.0;
-          vec3 r = vec3(uv, 1.0);
-          vec4 o = vec4(0.0);
-          float t = -iTime;
-          vec3 p;
-
-          for (float i = 0.0, z = 0.0, d; i < 100.0; i++) {
-            p = z * normalize(vec3(uv, 0.5));
-            vec4 angle = vec4(0.0, 33.0, 11.0, 0.0);
-            vec4 a = z * 2.0 - t * 0.1 + angle;
-            p.xy *= mat2(cos(a.x), sin(a.x), sin(a.x), cos(a.x));
-            z += d = length(cos(p + cos(p.yzx + p.x  * 0.2)).xy) / 6.0;
-            o += (sin(p.x - t + vec4(0.0, 2.0, 3.0, 0.0)) + 1.0) / d;
-          }
-
-          o = tanh(o / 1000.0);
-          
-          for (float i = 0.0; i < STEPS; i++) {
-            p = z * dir*o.xyz;
-            p.z -= iTime;
-            float angle = -p.z * TWIST;
-            p.xy *= mat2(cos(angle), -sin(angle), sin(angle), cos(angle));
-            vec3 v = cos(p + sin(p.yzx / 0.3));
-            z += d = length(max(v, v.zxy * OPACITY)) / 6.0;
-            col += (cos(COL_FREQ * p.z + RGB_SHIFT) + 1.0) / d;
-          }
-          
-          col = 1.0 - exp(-col / STEPS / 5e1);
-          vec4 fragColor = vec4(col, 1.0);
-          
-          uv *= 2.0 * (cos(-iTime * 2.0) - 2.5);
-          float anim = sin(iTime * 12.0) * 0.1 + 1.0;
-          fragColor += vec4(happy_star(uv, anim) * vec3(0.5,0.5,0.5)*0.5, 1.0);
-          
-          gl_FragColor = fragColor;
+          // Mix colors - uColor1 for fill, uColor2 for outlines
+          vec3 color = mix(uColor1, uColor2, pattern);
+          gl_FragColor = vec4(color, 1.0);
         }
-      `
-    });
-
-    // Create plane geometry
-    const geometry = new THREE.PlaneGeometry(2, 2);
-    const mesh = new THREE.Mesh(geometry, shaderMaterial);
-    scene.add(mesh);
-
-    // Handle resize
-    const handleResize = () => {
-      if (container) {
-        const width = container.clientWidth;
-        const height = container.clientHeight;
-        renderer.setSize(width, height);
-        
-        // Calculate scale based on window size
-        const scale = Math.min(width, height) / 1000;
-        shaderMaterial.uniforms.iScale.value = scale;
-        
-        shaderMaterial.uniforms.iResolution.value.set(
-          width,
-          height,
-          1
-        );
-      }
-    };
-
-    window.addEventListener('resize', handleResize);
-
-    // Animation loop
-    let animationFrameId;
-    const animate = () => {
-      animationFrameId = requestAnimationFrame(animate);
-      shaderMaterial.uniforms.iTime.value += 0.01;
-      renderer.render(scene, camera);
-    };
-    animate();
-
-    // Initial resize
-    handleResize();
-
-    // Cleanup
-    return () => {
-      window.removeEventListener('resize', handleResize);
-      cancelAnimationFrame(animationFrameId);
-      if (container && renderer.domElement) {
-        container.removeChild(renderer.domElement);
-      }
-      renderer.dispose();
-      geometry.dispose();
-      shaderMaterial.dispose();
-    };
-  }, []);
-
-  return (
-    <div
-      ref={containerRef}
-      style={{
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        width: '100%',
-        height: '100%',
-        zIndex: 1,
-        overflow: 'hidden'
-      }}
+      `}
     />
-  );
-};
+  )
+}
 
-export default ShaderBackground; 
+export default function ShaderBackground() {
+  return (
+    <div style={{ 
+      position: 'fixed', 
+      top: 0, 
+      left: 0, 
+      width: '100%', 
+      height: '100%', 
+      zIndex: -1,
+      overflow: 'hidden',
+      backgroundColor: '#007C74'  // Adding background color here
+    }}>
+      <Canvas
+        camera={{ position: [0, 0, 1] }}
+        style={{ background: '#007C74' }}
+      >
+        <mesh>
+          <planeGeometry args={[2, 2]} />
+          <GridShaderMaterial />
+        </mesh>
+      </Canvas>
+    </div>
+  )
+}
