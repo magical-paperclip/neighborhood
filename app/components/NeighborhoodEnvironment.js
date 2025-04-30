@@ -245,14 +245,12 @@ export default function NeighborhoodEnvironment({ hasEnteredNeighborhood, setHas
 
     const maploader = new GLTFLoader();
     maploader.setPath('/models/');
-
-<<<<<<< Updated upstream
     // Modify the map loading to create a trimesh collider
     maploader.load('sf_map_3.glb', function (gltf) {
       mapModel = gltf.scene;
       mapModel.scale.set(2.0, 2.0, 2.0);
       scene.add(gltf.scene);
-=======
+
     //load map
     maploader.load( 'sf_map_3.glb', function ( gltf ) {
       mapModel = gltf.scene
@@ -283,7 +281,6 @@ export default function NeighborhoodEnvironment({ hasEnteredNeighborhood, setHas
       console.error( error );
     
     } );
->>>>>>> Stashed changes
 
       // Collect all vertices and indices for the trimesh
       const vertices = [];
