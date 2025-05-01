@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import HackTimeSelectionShader from './HackTimeSelectionShader';
 import StopwatchComponent from './StopwatchComponent';
 import { getToken } from '@/utils/storage';
+import Soundfont from 'soundfont-player';
 
 const HackTimeComponent = ({ isExiting, onClose, userData }) => {
   const [timeTrackingMethod, setTimeTrackingMethod] = useState(''); // Default to stopwatch
@@ -22,6 +23,7 @@ const HackTimeComponent = ({ isExiting, onClose, userData }) => {
   const [sessionCommitMatches, setSessionCommitMatches] = useState({}); // Store matches between sessions and commits
   const [isLoadingCommits, setIsLoadingCommits] = useState({}); // Track loading state per project
   const [commitFetchErrors, setCommitFetchErrors] = useState({}); // Track fetch errors per project
+  const [piano, setPiano] = useState(null);
 
   // Add debounce helper at the top level of the component
   const debounce = (func, wait) => {
@@ -38,6 +40,70 @@ const HackTimeComponent = ({ isExiting, onClose, userData }) => {
 
   // Add a ref to track ongoing requests
   const [isUpdatingCommits, setIsUpdatingCommits] = useState({});
+
+  // Initialize piano sounds
+  useEffect(() => {
+    const ac = new AudioContext();
+    Soundfont.instrument(ac, 'acoustic_grand_piano').then((piano) => {
+      setPiano(piano);
+    });
+  }, []);
+
+  // Add sound effect functions
+  const playProjectCheckSound = () => {
+    if (piano) {
+      // Play an upward arpeggio for checking
+      const notes = ['C4', 'E4', 'G4', 'C5'];
+      const delays = [0, 50, 100, 150];
+      notes.forEach((note, index) => {
+        setTimeout(() => piano.play(note, 0, { gain: 0.3 }), delays[index]);
+      });
+    }
+  };
+
+  const playProjectUncheckSound = () => {
+    if (piano) {
+      // Play a downward arpeggio for unchecking
+      const notes = ['C5', 'G4', 'E4', 'C4'];
+      const delays = [0, 50, 100, 150];
+      notes.forEach((note, index) => {
+        setTimeout(() => piano.play(note, 0, { gain: 0.3 }), delays[index]);
+      });
+    }
+  };
+
+  const playExpandSound = () => {
+    if (piano) {
+      // Play a gentle chord for expanding
+      const notes = ['E4', 'A4', 'B4'];
+      const delays = [0, 30, 60];
+      notes.forEach((note, index) => {
+        setTimeout(() => piano.play(note, 0, { gain: 0.2 }), delays[index]);
+      });
+    }
+  };
+
+  const playCollapseSound = () => {
+    if (piano) {
+      // Play a gentle descending chord for collapsing
+      const notes = ['B4', 'A4', 'E4'];
+      const delays = [0, 30, 60];
+      notes.forEach((note, index) => {
+        setTimeout(() => piano.play(note, 0, { gain: 0.2 }), delays[index]);
+      });
+    }
+  };
+
+  const playGitHubConnectSound = () => {
+    if (piano) {
+      // Play a magical ascending sequence for GitHub connection
+      const notes = ['C4', 'E4', 'G4', 'C5', 'E5'];
+      const delays = [0, 50, 100, 150, 200];
+      notes.forEach((note, index) => {
+        setTimeout(() => piano.play(note, 0, { gain: 0.3 }), delays[index]);
+      });
+    }
+  };
 
   const fetchHackatimeData = async () => {
     try {
@@ -193,14 +259,26 @@ const HackTimeComponent = ({ isExiting, onClose, userData }) => {
       const startDate = new Date(2025, 0, 1); // Month is 0-indexed
       const formattedDate = startDate.toISOString().split('T')[0];
       
+      if (!userData?.slackId) {
+        console.error('No Slack ID found in user data');
+        return;
+      }
+
       const response = await fetch(
-        `https://hackatime.hackclub.com/api/v1/users/U041FQB8VK2/heartbeats/spans?start_date=${formattedDate}&project=${encodeURIComponent(projectName)}`
+        `/api/hackatime/sessions?userId=${userData.slackId}&startDate=${formattedDate}&project=${encodeURIComponent(projectName)}`
       );
       const data = await response.json();
+      
+      // Update project sessions
       setProjectSessions(prev => ({
         ...prev,
         [projectName]: data.spans
       }));
+
+      // If project has commits, match sessions with commits immediately
+      if (commitData[projectName]) {
+        matchSessionsToCommits(data.spans, commitData[projectName], projectName);
+      }
     } catch (error) {
       console.error('Error fetching project sessions:', error);
     }
@@ -208,16 +286,51 @@ const HackTimeComponent = ({ isExiting, onClose, userData }) => {
 
   const toggleProject = async (projectName) => {
     const isOpening = !openedProjects.includes(projectName);
+    
+    if (isOpening) {
+      playExpandSound();
+    } else {
+      playCollapseSound();
+    }
+
+    // Set opened state first
     setOpenedProjects(prev => 
       prev.includes(projectName) 
         ? prev.filter(name => name !== projectName)
         : [...prev, projectName]
     );
     
-    if (isOpening && !projectSessions[projectName]) {
-      await fetchProjectSessions(projectName);
+    // Only fetch if opening and we don't have sessions yet
+    if (isOpening) {
+      if (!projectSessions[projectName]) {
+        await fetchProjectSessions(projectName);
+      }
+      
+      // If we have commits but haven't matched them yet, do the matching
+      if (commitData[projectName] && !sessionCommitMatches[projectName] && projectSessions[projectName]) {
+        matchSessionsToCommits(
+          projectSessions[projectName],
+          commitData[projectName],
+          projectName
+        );
+      }
     }
   };
+
+  // Add effect to maintain opened state when commits load
+  useEffect(() => {
+    // For each opened project
+    openedProjects.forEach(projectName => {
+      // If we have new commits that haven't been matched yet
+      if (commitData[projectName] && !sessionCommitMatches[projectName] && projectSessions[projectName]) {
+        matchSessionsToCommits(
+          projectSessions[projectName],
+          commitData[projectName],
+          projectName
+        );
+      }
+    });
+  }, [commitData, projectSessions]);
 
   // Helper to get all session times for a project
   const getAllSessionTimes = (projectName) => (projectSessions[projectName] || []).map(session => session.start_time);
@@ -233,9 +346,25 @@ const HackTimeComponent = ({ isExiting, onClose, userData }) => {
     }
 
     const isCurrentlyChecked = checkedProjects.includes(projectName);
+    
+    if (!isCurrentlyChecked) {
+      playProjectCheckSound();
+    } else {
+      playProjectUncheckSound();
+    }
 
     try {
       if (!isCurrentlyChecked) {
+        // Update local state immediately for better UX
+        setCheckedProjects(prev => [...prev, projectName]);
+        
+        // Update projects state to mark as checked
+        setProjects(prev => prev.map(p => 
+          p.name === projectName 
+            ? { ...p, isChecked: true }
+            : p
+        ));
+
         // Add project
         const response = await fetch('/api/addProject', {
           method: 'POST',
@@ -250,11 +379,15 @@ const HackTimeComponent = ({ isExiting, onClose, userData }) => {
         });
 
         if (!response.ok) {
+          // Revert state changes if request fails
+          setCheckedProjects(prev => prev.filter(name => name !== projectName));
+          setProjects(prev => prev.map(p => 
+            p.name === projectName 
+              ? { ...p, isChecked: false }
+              : p
+          ));
           throw new Error('Failed to add project');
         }
-
-        // Update local state immediately
-        setCheckedProjects(prev => [...prev, projectName]);
 
         // If project has commits, update them in Airtable
         if (commitData[projectName]) {
@@ -267,6 +400,16 @@ const HackTimeComponent = ({ isExiting, onClose, userData }) => {
         }
 
       } else {
+        // Update local state immediately for better UX
+        setCheckedProjects(prev => prev.filter(name => name !== projectName));
+        
+        // Update projects state to mark as unchecked
+        setProjects(prev => prev.map(p => 
+          p.name === projectName 
+            ? { ...p, isChecked: false }
+            : p
+        ));
+
         // Remove project
         const response = await fetch('/api/removeProject', {
           method: 'POST',
@@ -280,16 +423,19 @@ const HackTimeComponent = ({ isExiting, onClose, userData }) => {
         });
 
         if (!response.ok) {
+          // Revert state changes if request fails
+          setCheckedProjects(prev => [...prev, projectName]);
+          setProjects(prev => prev.map(p => 
+            p.name === projectName 
+              ? { ...p, isChecked: true }
+              : p
+          ));
           throw new Error('Failed to remove project');
         }
-
-        // Update local state immediately
-        setCheckedProjects(prev => prev.filter(name => name !== projectName));
       }
     } catch (error) {
       console.error('Error updating project:', error);
-      // Refresh data to ensure correct state
-      fetchHackatimeData();
+      // Don't refresh data automatically - we're handling state updates manually
     }
   };
 
@@ -387,26 +533,109 @@ const HackTimeComponent = ({ isExiting, onClose, userData }) => {
     setShowGithubInput(true);
   };
 
-  // Modify the commit fetching logic to ensure unique SHAs
+  const matchSessionsToCommits = (sessions, commits, projectName) => {
+    console.log('Starting matching for project:', projectName);
+    console.log('Sessions:', sessions.length);
+    console.log('Commits:', commits.length);
+
+    // Sort commits by date ascending
+    const sortedCommits = [...commits].sort((a, b) => a.date - b.date);
+
+    // Log first and last commit dates
+    if (sortedCommits.length > 0) {
+      console.log('First commit:', {
+        date: new Date(sortedCommits[0].date).toISOString(),
+        message: sortedCommits[0].message
+      });
+      console.log('Last commit:', {
+        date: new Date(sortedCommits[sortedCommits.length - 1].date).toISOString(),
+        message: sortedCommits[sortedCommits.length - 1].message
+      });
+    }
+
+    // For each session, find the earliest commit after the session ends
+    const matches = {};
+    sessions.forEach(session => {
+      const sessionEnd = new Date(session.start_time * 1000 + session.duration * 1000).getTime();
+      
+      // Find the first commit after sessionEnd using binary search for performance
+      let left = 0;
+      let right = sortedCommits.length - 1;
+      let matchingCommit = null;
+
+      while (left <= right) {
+        const mid = Math.floor((left + right) / 2);
+        const commit = sortedCommits[mid];
+        
+        if (commit.date >= sessionEnd) {
+          matchingCommit = commit;
+          right = mid - 1; // Look for an earlier matching commit
+        } else {
+          left = mid + 1;
+        }
+      }
+
+      if (matchingCommit) {
+        matches[session.start_time] = matchingCommit;
+        console.log('Matched session:', {
+          sessionEnd: new Date(sessionEnd).toISOString(),
+          commitDate: new Date(matchingCommit.date).toISOString(),
+          commitMessage: matchingCommit.message
+        });
+      } else {
+        matches[session.start_time] = null;
+        console.log('No matching commit for session ending at:', new Date(sessionEnd).toISOString());
+      }
+    });
+
+    console.log('Total matches found:', Object.keys(matches).filter(k => matches[k] !== null).length);
+    
+    setSessionCommitMatches(prev => ({
+      ...prev,
+      [projectName]: matches
+    }));
+  };
+
   const fetchGithubCommits = async (repoPath) => {
-    console.log('fetchGithubCommits called for:', repoPath);
     try {
+      console.log(`Starting to fetch commits for ${repoPath}...`);
+      
+      // Clean up the repo path - handle both URL and owner/repo format
+      let cleanRepoPath = repoPath;
+      if (repoPath.includes('github.com')) {
+        // Handle full URLs with optional .git extension
+        cleanRepoPath = repoPath.replace(/https?:\/\/github\.com\//, '')
+                               .replace(/\.git$/, '')
+                               .replace(/\/$/, ''); // Remove trailing slash
+      }
+      
+      // Remove any extra segments after owner/repo
+      cleanRepoPath = cleanRepoPath.split('/').slice(0, 2).join('/');
+      
+      console.log(`Cleaned repo path: ${cleanRepoPath}`);
+      
+      if (!cleanRepoPath.includes('/')) {
+        throw new Error('Invalid repository format. Expected owner/repo');
+      }
+
       let allCommits = [];
       let page = 1;
       let hasMore = true;
-      const seenShas = new Set(); // Track unique SHAs
 
       while (hasMore) {
-        console.log(`Fetching page ${page} of commits for ${repoPath}`);
-        const response = await fetch(
-          `https://api.github.com/repos/${repoPath}/commits?author=SerenityUX&per_page=100&page=${page}`,
-          {
-            headers: {
-              'Authorization': `Bearer ${process.env.NEXT_PUBLIC_GITHUB_TOKEN}`,
-              'Accept': 'application/vnd.github.v3+json'
-            }
+        const url = `https://api.github.com/repos/${cleanRepoPath}/commits?per_page=100&page=${page}`;
+        console.log(`Fetching page ${page} from: ${url}`);
+        
+        const response = await fetch(url, {
+          headers: {
+            'Accept': 'application/vnd.github.v3+json',
+            'Authorization': 'Bearer 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'
           }
-        );
+        });
+        
+        if (response.status === 404) {
+          throw new Error('Repository not found. Please check the URL and ensure the repository is public.');
+        }
         
         if (!response.ok) {
           const errorData = await response.json();
@@ -415,56 +644,36 @@ const HackTimeComponent = ({ isExiting, onClose, userData }) => {
         }
 
         const commits = await response.json();
-        console.log(`Received ${commits.length} commits for ${repoPath} on page ${page}`);
+        console.log(`Fetched ${commits.length} commits on page ${page}`);
         
-        // Filter out merge commits and duplicates
-        for (const commit of commits) {
-          const sha = commit.sha.trim();
-          if (!commit.commit.message.toLowerCase().includes('merge') && !seenShas.has(sha)) {
-            seenShas.add(sha);
-            allCommits.push({
-              sha,
-              message: commit.commit.message,
-              date: new Date(commit.commit.author.date),
-              url: commit.html_url
-            });
-          }
-        }
+        // Filter out merge commits and add to all commits
+        const filteredCommits = commits
+          .filter(commit => !commit.commit.message.toLowerCase().includes('merge'))
+          .map(commit => ({
+            sha: commit.sha,
+            message: commit.commit.message,
+            date: new Date(commit.commit.author.date).getTime(),
+            url: commit.html_url
+          }));
+
+        allCommits = [...allCommits, ...filteredCommits];
         
         // Check if we've reached the end
         hasMore = commits.length === 100;
         page++;
       }
 
-      console.log(`Total unique commits fetched for ${repoPath}:`, allCommits.length);
+      console.log(`Total commits fetched and filtered: ${allCommits.length}`);
       return allCommits;
     } catch (error) {
       console.error('Error in fetchGithubCommits:', error);
-      throw error;
+      // Include the error message in the commit fetch errors
+      setCommitFetchErrors(prev => ({
+        ...prev,
+        [repoPath]: error.message
+      }));
+      return [];
     }
-  };
-
-  const matchSessionsToCommits = (sessions, commits, projectName) => {
-    // Sort commits by unix time ascending
-    const sortedCommits = [...commits].sort((a, b) => a.date - b.date);
-
-    // For each session, find the earliest commit after the session ends
-    const matches = {};
-    sessions.forEach(session => {
-      const sessionEnd = new Date(session.start_time * 1000 + session.duration * 1000);
-      // Find the first commit after sessionEnd
-      const commit = sortedCommits.find(c => c.date >= sessionEnd);
-      if (commit) {
-        matches[session.start_time] = commit;
-      } else {
-        matches[session.start_time] = null; // Mark as uncommitted
-      }
-    });
-
-    setSessionCommitMatches(prev => ({
-      ...prev,
-      [projectName]: matches
-    }));
   };
 
   const handleGithubInputSubmit = async (e) => {
@@ -473,14 +682,42 @@ const HackTimeComponent = ({ isExiting, onClose, userData }) => {
     const githubLink = input.value.trim();
     
     if (githubLink) {
-      const token = getToken();
-      if (!token) {
-        console.error('No token found');
+      // Extract repo path from various GitHub URL formats
+      const urlMatch = githubLink.match(/github\.com[\/:]([^\/]+\/[^\/]+?)(?:\.git|\/?$)/);
+      const directMatch = githubLink.match(/^([^\/]+\/[^\/]+?)(?:\.git|\/?$)/);
+      
+      const repoPath = urlMatch ? urlMatch[1] : directMatch ? directMatch[1] : null;
+      
+      if (!repoPath) {
+        setCommitFetchErrors(prev => ({
+          ...prev,
+          [currentProjectForGithub]: 'Invalid GitHub URL format. Please use owner/repo or full GitHub URL.'
+        }));
         return;
       }
 
+      const normalizedGithubLink = `https://github.com/${repoPath}`;
+
+      // Update local state immediately
+      setGithubLinks(prev => ({
+        ...prev,
+        [currentProjectForGithub]: normalizedGithubLink
+      }));
+
+      // Set loading state
+      setIsLoadingCommits(prev => ({
+        ...prev,
+        [currentProjectForGithub]: true
+      }));
+
       try {
-        const response = await fetch('/api/connectGithub', {
+        // Update GitHub link in Airtable
+        const token = getToken();
+        if (!token) {
+          throw new Error('No token found');
+        }
+
+        const updateResponse = await fetch('/api/updateProjectGithub', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -488,64 +725,58 @@ const HackTimeComponent = ({ isExiting, onClose, userData }) => {
           body: JSON.stringify({
             token,
             projectName: currentProjectForGithub,
-            githubLink: githubLink
+            githubLink: normalizedGithubLink
           })
         });
 
-        if (!response.ok) {
-          throw new Error('Failed to connect GitHub repo');
+        if (!updateResponse.ok) {
+          throw new Error('Failed to update GitHub link');
         }
 
-        // Update local state
-        setGithubLinks(prev => ({
-          ...prev,
-          [currentProjectForGithub]: githubLink
-        }));
+        // Play success sound
+        playGitHubConnectSound();
 
-        // Set loading state
-        setIsLoadingCommits(prev => ({
-          ...prev,
-          [currentProjectForGithub]: true
-        }));
-
-        try {
-          // Extract repo path from the full URL
-          const match = githubLink.match(/github\.com\/([^\/]+\/[^\/]+)/);
-          if (!match) {
-            throw new Error('Invalid GitHub URL format');
-          }
-          const repoPath = match[1];
-
-          // Fetch commits for this repository
-          const commits = await fetchGithubCommits(repoPath);
-          setCommitData(prev => ({
+        // Fetch commits for this repository
+        const commits = await fetchGithubCommits(repoPath);
+        console.log('Fetched commits:', commits.length);
+        
+        // Update commit data in state
+        setCommitData(prev => {
+          const newState = {
             ...prev,
             [currentProjectForGithub]: commits
-          }));
+          };
+          console.log('Updated commit data:', newState);
+          return newState;
+        });
 
-          // Match sessions with commits if we have sessions for this project
-          if (projectSessions[currentProjectForGithub]) {
-            matchSessionsToCommits(
-              projectSessions[currentProjectForGithub],
-              commits,
-              currentProjectForGithub
-            );
-          }
-        } catch (error) {
-          console.error('Error fetching commits:', error);
-          setCommitFetchErrors(prev => ({
-            ...prev,
-            [currentProjectForGithub]: error.message
-          }));
-        } finally {
-          // Clear loading state
-          setIsLoadingCommits(prev => ({
-            ...prev,
-            [currentProjectForGithub]: false
-          }));
+        // Match sessions with commits if we have sessions for this project
+        if (projectSessions[currentProjectForGithub]) {
+          matchSessionsToCommits(
+            projectSessions[currentProjectForGithub],
+            commits,
+            currentProjectForGithub
+          );
         }
       } catch (error) {
-        console.error('Error connecting GitHub:', error);
+        console.error('Error updating GitHub link:', error);
+        setCommitFetchErrors(prev => ({
+          ...prev,
+          [currentProjectForGithub]: error.message
+        }));
+        
+        // Revert local state on error
+        setGithubLinks(prev => {
+          const newState = { ...prev };
+          delete newState[currentProjectForGithub];
+          return newState;
+        });
+      } finally {
+        // Clear loading state
+        setIsLoadingCommits(prev => ({
+          ...prev,
+          [currentProjectForGithub]: false
+        }));
       }
     }
     
@@ -616,7 +847,7 @@ const HackTimeComponent = ({ isExiting, onClose, userData }) => {
       .map(commit => commit.date);
     const mostRecentCommitDate = commitDates.length > 0 ? Math.max(...commitDates) : null;
     
-    // Always initialize uncommitted time group
+    // Initialize groups
     grouped['uncommitted'] = {
       commit: null,
       sessions: [],
@@ -626,7 +857,7 @@ const HackTimeComponent = ({ isExiting, onClose, userData }) => {
     // Group sessions by their commit SHA
     sessions.forEach(session => {
       const commit = matches[session.start_time];
-      const sessionDate = new Date(session.start_time * 1000);
+      const sessionDate = session.start_time * 1000;
       
       if (commit) {
         if (!grouped[commit.sha]) {
@@ -651,7 +882,7 @@ const HackTimeComponent = ({ isExiting, onClose, userData }) => {
       }
     });
 
-    // Convert to array, sort by date, and convert back to object
+    // Sort entries by date
     const sortedEntries = Object.entries(grouped).sort((a, b) => {
       // Put uncommitted at the top
       if (a[0] === 'uncommitted') return -1;
@@ -662,14 +893,21 @@ const HackTimeComponent = ({ isExiting, onClose, userData }) => {
       if (b[0] === 'unmatched') return -1;
       
       // Sort by commit date, newest first
-      return b[1].commit.date - a[1].commit.date;
+      const dateA = a[1].commit?.date || 0;
+      const dateB = b[1].commit?.date || 0;
+      return dateB - dateA;
     });
 
     // Convert back to object while maintaining order
     const sortedGrouped = Object.fromEntries(sortedEntries);
 
-    // Verify time totals
-    verifyTimeTotals(sessions, sortedGrouped, projectName);
+    // Log grouping results
+    console.log('Grouping results for', projectName, ':', {
+      totalSessions: sessions.length,
+      uncommittedCount: sortedGrouped['uncommitted']?.sessions.length || 0,
+      unmatchedCount: sortedGrouped['unmatched']?.sessions.length || 0,
+      commitGroups: Object.keys(sortedGrouped).length - 2 // Subtract uncommitted and unmatched
+    });
 
     return sortedGrouped;
   };
@@ -714,44 +952,18 @@ const HackTimeComponent = ({ isExiting, onClose, userData }) => {
     const totalDuration = getTotalDuration(sessions);
     const isUnmatched = !commit && !isUncommitted;
     const commitSha = commit?.sha || (isUncommitted ? 'uncommitted' : 'unmatched');
-    const isProjectChecked = checkedProjects.includes(projectName);
     
     return (
       <div key={commitSha}>
         <div style={{ display: 'flex', alignItems: 'center', marginBottom: '4px' }}>
-          {!isUncommitted && isProjectChecked && (
-            <div style={{ 
-              marginRight: '12px',
-              width: '16px',
-              height: '16px',
-              position: 'relative',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center'
-            }}>
-              <div style={{
-                width: '16px',
-                height: '16px',
-                backgroundColor: '#A4D4A2',
-                borderRadius: '3px',
-                border: "1px solid #007C74",
-                position: 'absolute',
-                pointerEvents: 'none'
-              }} />
-              <div style={{
-                width: '10px',
-                height: '10px',
-                position: 'relative',
-                zIndex: 1,
-                pointerEvents: 'none'
-              }}>
-
-              </div>
-            </div>
-          )}
-          {!isUncommitted && !isProjectChecked && (
-            <div style={{ width: '16px', marginRight: '12px' }} />
-          )}
+          <div style={{ marginRight: '12px' }}>
+            <input 
+              type="checkbox" 
+              checked={true}
+              disabled={true}
+              style={{ opacity: 0.7 }}
+            />
+          </div>
           <div style={{ flex: 1 }}>
             {isUncommitted ? (
               <span style={{ 
@@ -799,7 +1011,7 @@ const HackTimeComponent = ({ isExiting, onClose, userData }) => {
             {sessions
               .slice()
               .sort((a, b) => b.start_time - a.start_time)
-              .map((session, index) => renderSessionWithCommit(session, projectName))}
+              .map((session) => renderSessionWithCommit(session, projectName))}
           </div>
         )}
       </div>
@@ -811,18 +1023,25 @@ const HackTimeComponent = ({ isExiting, onClose, userData }) => {
     return sessions.reduce((sum, s) => sum + s.duration, 0);
   };
 
-  // Calculate total pending time from selected sessions
+  // Calculate total pending time from checked projects
   const calculatePendingTime = () => {
     let totalSeconds = 0;
-    Object.entries(selectedSessions).forEach(([projectName, sessions]) => {
-      sessions.forEach(sessionTime => {
-        const session = projectSessions[projectName]?.find(s => s.start_time === sessionTime);
-        if (session) {
-          totalSeconds += session.duration;
-        }
-      });
+    
+    // Loop through all checked projects
+    checkedProjects.forEach(projectName => {
+      // Get all sessions for this project
+      const projectSessionsList = projectSessions[projectName] || [];
+      
+      // Sum up all session durations for this project
+      const projectSeconds = projectSessionsList.reduce((sum, session) => {
+        return sum + session.duration;
+      }, 0);
+      
+      totalSeconds += projectSeconds;
     });
-    return (totalSeconds / 3600).toFixed(2); // Convert to hours
+
+    // Convert to hours with 2 decimal places
+    return (totalSeconds / 3600).toFixed(2);
   };
 
   // Update the session display to show commit information
@@ -838,18 +1057,14 @@ const HackTimeComponent = ({ isExiting, onClose, userData }) => {
         alignItems: 'center',
         marginBottom: '8px'
       }}>
-        {isProjectChecked ? (
-          <div style={{ marginRight: '12px' }}>
-            <input 
-              type="checkbox" 
-              checked={true}
-              disabled={true}
-              style={{ opacity: 0.7 }}
-            />
-          </div>
-        ) : (
-          <div style={{ width: '12px', marginRight: '12px' }} />
-        )}
+        <div style={{ marginRight: '12px' }}>
+          <input 
+            type="checkbox" 
+            checked={true}
+            disabled={true}
+            style={{ opacity: 0.7 }}
+          />
+        </div>
         <div style={{ 
           display: 'flex',
           alignItems: 'center',
@@ -920,33 +1135,33 @@ const HackTimeComponent = ({ isExiting, onClose, userData }) => {
       setIsUpdatingCommits(prev => ({ ...prev, [projectName]: true }));
       
       console.log('Updating commits for project:', projectName);
-      const response = await fetch('/api/updateCommits', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          token,
-          projectName,
-          commits: commits.map(commit => ({
-            ...commit,
-            sha: commit.sha.trim() // Ensure no whitespace in SHA
-          }))
-        })
-      });
+      // const response = await fetch('/api/updateCommits', {
+      //   method: 'POST',
+      //   headers: {
+      //     'Content-Type': 'application/json',
+      //   },
+      //   body: JSON.stringify({
+      //     token,
+      //     projectName,
+      //     commits: commits.map(commit => ({
+      //       ...commit,
+      //       sha: commit.sha.trim() // Ensure no whitespace in SHA
+      //     }))
+      //   })
+      // });
 
-      if (!response.ok) {
-        throw new Error('Failed to update commits');
-      }
+      // if (!response.ok) {
+      //   throw new Error('Failed to update commits');
+      // }
 
-      const result = await response.json();
-      console.log('Commits update result:', result);
+      // const result = await response.json();
+      console.log('Commits update skipped');
     } catch (error) {
       console.error('Error updating commits:', error);
     } finally {
       setIsUpdatingCommits(prev => ({ ...prev, [projectName]: false }));
     }
-  }, 1000); // 1 second debounce
+  }, 1000);
 
   // Add updateSessionsInAirtable function
   const updateSessionsInAirtable = debounce(async (projectName, sessions) => {
@@ -966,25 +1181,25 @@ const HackTimeComponent = ({ isExiting, onClose, userData }) => {
       setIsUpdatingCommits(prev => ({ ...prev, [projectName]: true }));
       
       console.log('Updating sessions for project:', projectName);
-      const response = await fetch('/api/updateSessions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          token,
-          projectName,
-          sessions,
-          sessionCommitMatches: sessionCommitMatches[projectName] || {}
-        })
-      });
+      // const response = await fetch('/api/updateSessions', {
+      //   method: 'POST',
+      //   headers: {
+      //     'Content-Type': 'application/json',
+      //   },
+      //   body: JSON.stringify({
+      //     token,
+      //     projectName,
+      //     sessions,
+      //     sessionCommitMatches: sessionCommitMatches[projectName] || {}
+      //   })
+      // });
 
-      if (!response.ok) {
-        throw new Error('Failed to update sessions');
-      }
+      // if (!response.ok) {
+      //   throw new Error('Failed to update sessions');
+      // }
 
-      const result = await response.json();
-      console.log('Sessions update result:', result);
+      // const result = await response.json();
+      console.log('Sessions update skipped');
     } catch (error) {
       console.error('Error updating sessions:', error);
     } finally {
@@ -1246,65 +1461,97 @@ const HackTimeComponent = ({ isExiting, onClose, userData }) => {
 
 
           {projects.map((project) => {
-            const isChecked = checkedProjects.includes(project.name);
+            const projectChecked = isProjectChecked(project.name);
+            const hasCommits = commitData[project.name]?.length > 0;
             const grouped = groupSessionsByCommit(projectSessions[project.name] || [], project.name);
-            const dayKeys = Object.keys(grouped).sort((a, b) => b.localeCompare(a)); // newest first
-            // Project total duration
             const projectTotal = getTotalDuration(projectSessions[project.name] || []);
+            
             return (
               <div key={project.name}>
                 <div style={{
                   display: 'flex',
                   alignItems: 'center',
                   marginBottom: '8px',
-                  width: '100%'
+                  width: '100%',
+                  position: 'relative'
                 }}>
                   <div style={{ marginRight: '12px' }}>
                     <input 
                       type="checkbox" 
-                      checked={isChecked}
+                      checked={projectChecked}
                       onChange={() => handleProjectSelect(project.name)}
                     />
                   </div>
                   <div style={{ flex: 1 }}>
-                    <p style={{ margin: 0 }}>
-                      {project.name}
-                      {projectTotal > 0 ? ` (${formatDuration(projectTotal)})` : ''}
-                      {githubLinks[project.name] ? ` (${githubLinks[project.name]})` : (
+                    <p style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span>{project.name}</span>
+                      {projectTotal > 0 ? (
+                        <span style={{ color: '#666' }}>({formatDuration(projectTotal)})</span>
+                      ) : null}
+                      {githubLinks[project.name] ? (
+                        <span style={{ 
+                          fontSize: '12px',
+                          color: '#666',
+                          opacity: 0.8
+                        }}>
+                          ({githubLinks[project.name].replace(/https?:\/\/github\.com\//, '')})
+                        </span>
+                      ) : projectChecked ? (
                         <span 
                           onClick={() => handleGithubLink(project.name)}
                           style={{ 
-                            color: '#ef758a', 
-                            cursor: 'pointer', 
-                            marginLeft: '8px',
-                            fontSize: '12px'
+                            color: '#ef758a',
+                            background: '#ffeef0',
+                            padding: '2px 8px',
+                            borderRadius: '4px',
+                            cursor: 'pointer',
+                            fontSize: '12px',
+                            fontWeight: '500',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            border: '1px solid #ffd1d6'
                           }}
                         >
-                          (Connect GitHub)
+                          <span style={{ fontSize: '14px' }}>⚠️</span>
+                          Connect GitHub Required
                         </span>
-                      )}
+                      ) : null}
                     </p>
+                    {projectChecked && !githubLinks[project.name] && (
+                      <p style={{
+                        margin: '4px 0 0 0',
+                        fontSize: '12px',
+                        color: '#666',
+                        fontStyle: 'italic'
+                      }}>
+                        Connect GitHub to track time against commits
+                      </p>
+                    )}
                   </div>
-                  <div>
-                    <button 
-                      onClick={() => toggleProject(project.name)}
-                      style={{
-                        padding: '4px 8px',
-                        border: '1px solid #ccc',
-                        borderRadius: '4px',
-                        backgroundColor: 'white',
-                        cursor: 'pointer',
-                        transform: openedProjects.includes(project.name) ? 'rotate(180deg)' : 'none'
-                      }}
-                    >
-                      ▼
-                    </button>
-                  </div>
+                  {hasCommits && (
+                    <div>
+                      <button 
+                        onClick={() => toggleProject(project.name)}
+                        style={{
+                          padding: '4px 8px',
+                          border: '1px solid #ccc',
+                          borderRadius: '4px',
+                          backgroundColor: 'white',
+                          cursor: 'pointer',
+                          transform: openedProjects.includes(project.name) ? 'rotate(180deg)' : 'none'
+                        }}
+                      >
+                        ▼
+                      </button>
+                    </div>
+                  )}
                 </div>
-                {openedProjects.includes(project.name) && (
+                {openedProjects.includes(project.name) && hasCommits && (
                   <div style={{ paddingLeft: '24px', marginBottom: '8px' }}>
-                    {Object.entries(grouped)
-                      .map(([commitSha, commitGroup]) => renderCommitGroup(project.name, commitGroup))}
+                    {Object.entries(grouped).map(([commitSha, commitGroup]) => 
+                      renderCommitGroup(project.name, commitGroup)
+                    )}
                   </div>
                 )}
               </div>
@@ -1331,11 +1578,28 @@ const HackTimeComponent = ({ isExiting, onClose, userData }) => {
         }}>
           <div style={{
             backgroundColor: 'white',
-            padding: '20px',
+            padding: '24px',
             borderRadius: '8px',
-            width: '400px'
+            width: '400px',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
           }}>
-            <h3 style={{ margin: '0 0 16px 0' }}>Connect GitHub Repository</h3>
+            <h3 style={{ 
+              margin: '0 0 8px 0',
+              color: '#ef758a',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px'
+            }}>
+              <span style={{ fontSize: '20px' }}>🔗</span>
+              Connect GitHub Repository
+            </h3>
+            <p style={{
+              margin: '0 0 16px 0',
+              color: '#666',
+              fontSize: '14px'
+            }}>
+              Required to track time against commits
+            </p>
             <form onSubmit={handleGithubInputSubmit}>
               <input
                 type="text"
@@ -1343,10 +1607,11 @@ const HackTimeComponent = ({ isExiting, onClose, userData }) => {
                 placeholder="https://github.com/username/repo"
                 style={{
                   width: '100%',
-                  padding: '8px',
+                  padding: '8px 12px',
                   marginBottom: '16px',
-                  border: '1px solid #ccc',
-                  borderRadius: '4px'
+                  border: '1px solid #ddd',
+                  borderRadius: '4px',
+                  fontSize: '14px'
                 }}
               />
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
@@ -1355,10 +1620,11 @@ const HackTimeComponent = ({ isExiting, onClose, userData }) => {
                   onClick={() => setShowGithubInput(false)}
                   style={{
                     padding: '8px 16px',
-                    border: '1px solid #ccc',
+                    border: '1px solid #ddd',
                     borderRadius: '4px',
                     backgroundColor: 'white',
-                    cursor: 'pointer'
+                    cursor: 'pointer',
+                    fontSize: '14px'
                   }}
                 >
                   Cancel
@@ -1371,10 +1637,12 @@ const HackTimeComponent = ({ isExiting, onClose, userData }) => {
                     borderRadius: '4px',
                     backgroundColor: '#ef758a',
                     color: 'white',
-                    cursor: 'pointer'
+                    cursor: 'pointer',
+                    fontSize: '14px',
+                    fontWeight: '500'
                   }}
                 >
-                  Connect
+                  Connect Repository
                 </button>
               </div>
             </form>
