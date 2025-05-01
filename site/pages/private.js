@@ -157,12 +157,24 @@ export default function Home() {
         justifyContent: "center", 
         alignItems: "center",
         fontFamily: "'M PLUS Rounded 1c', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
-        backgroundImage: "url('/animal-crossing-island.png')",
-        backgroundSize: "cover",
-        backgroundPosition: "center",
-        backgroundRepeat: "no-repeat",
-        width: "100vw"
+        width: "100vw",
+        position: "relative",
+        overflow: "hidden"
       }}>
+        <video
+          autoPlay
+          muted
+          loop
+          playsInline
+          style={{
+            position: "absolute",
+            width: "100%",
+            height: "100%",
+            objectFit: "cover",
+            zIndex: 1
+          }}
+          src="./background.mp4"
+        />
         <img style={{maxWidth: "100%", marginBottom: 16, width: 400, zIndex: 3}} src="./neighborhoodLogo.png"/>
         <div style={{position: "relative", zIndex: 2, marginTop: 0,}}>
           <div style={{position: "relative", zIndex: 1}}>
@@ -379,6 +391,7 @@ export default function Home() {
                 marginTop: 24,
                 flexDirection: "row", 
                 gap: 12, 
+                zIndex: 2,
                 alignItems: "center",
                 width: "calc(100%)",
                 justifyContent: "center"

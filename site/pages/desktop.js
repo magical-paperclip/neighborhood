@@ -22,6 +22,7 @@ export default function Home() {
   const [userData, setUserData] = useState();
   const [token, setToken] = useState("");
   const [showNeighborhoodPopup, setShowNeighborhoodPopup] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
   const banjoSound = useRef(null);
 
@@ -32,13 +33,18 @@ export default function Home() {
 
     // If user is signed in, update their Slack data
     if (token) {
+      setIsLoading(true);
       updateSlackUserData(token)
         .then(data => {
           setUserData(data);
+          setIsLoading(false);
         })
         .catch(error => {
           console.error('Failed to update user data:', error);
+          setIsLoading(false);
         });
+    } else {
+      setIsLoading(false);
     }
 
     // Initialize audio
@@ -169,11 +175,12 @@ export default function Home() {
                 display: "flex",
                 alignItems: "center",
                 gap: "8px",
-                cursor: "pointer"
+                cursor: isLoading ? "not-allowed" : "pointer",
+                opacity: isLoading ? 0.5 : 1
               }}
-              onMouseEnter={() => setSelectedItem(item.id)}
+              onMouseEnter={() => !isLoading && setSelectedItem(item.id)}
               onMouseLeave={() => {}}
-              onClick={() => handleMenuItemClick(item.id)}
+              onClick={() => !isLoading && handleMenuItemClick(item.id)}
             >
               <span 
                 style={{

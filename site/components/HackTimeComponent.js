@@ -1575,7 +1575,7 @@ const HackTimeComponent = ({ isExiting, onClose, userData }) => {
                 isExiting={isStopwatchExiting}
                 onClose={handleCloseAddProject}
                 onProjectAdded={handleProjectAdded}
-                userData
+                userData={userData}
               />
             )}
           </div>
