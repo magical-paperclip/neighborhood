@@ -24,8 +24,92 @@ export default function Home() {
   const [token, setToken] = useState("");
   const [showNeighborhoodPopup, setShowNeighborhoodPopup] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [weatherTexture, setWeatherTexture] = useState("sunny.svg");
+  const [currentTime, setCurrentTime] = useState("");
+  const [isAM, setIsAM] = useState(false);
+
+  // Update time in Animal Crossing format
+  useEffect(() => {
+    const updateACTime = () => {
+      const now = new Date();
+      // Get time in Los Angeles (Animal Crossing-style uses 12-hour format)
+      const options = {
+        timeZone: "America/Los_Angeles",
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true,
+      };
+
+      const timeString = new Intl.DateTimeFormat("en-US", options).format(now);
+
+      // Split into time and AM/PM
+      const [time, period] = timeString.split(" ");
+
+      // Set states
+      setCurrentTime(time);
+      setIsAM(period === "AM");
+    };
+
+    // Update immediately and then every minute
+    updateACTime();
+    const intervalId = setInterval(updateACTime, 60000);
+
+    return () => clearInterval(intervalId);
+  }, []);
+  const fetchWeather = async () => {
+    const response = await fetch("https://wttr.in/SFO?format=%C&lang=en");
+    const data = await response.text();
+    console.log(data);
+    console.log(classifyWeather(data));
+    setWeatherTexture(`./${classifyWeather(data)}.svg`);
+  };
+  fetchWeather();
 
   const banjoSound = useRef(null);
+
+  function classifyWeather(condition) {
+    const c = condition.toLowerCase();
+
+    // Sunny or clear conditions
+    if (
+      c.includes("sun") ||
+      c.includes("clear") ||
+      c.includes("blazing") ||
+      c.includes("bright")
+    ) {
+      return "sunny";
+    }
+
+    // Rainy or thunderstorm conditions
+    if (
+      c.includes("rain") ||
+      c.includes("showers") ||
+      c.includes("thunder") ||
+      c.includes("drizzle") ||
+      c.includes("sleet") ||
+      c.includes("blizzard") ||
+      c.includes("torrential")
+    ) {
+      return "rain";
+    }
+
+    // Cloudy or overcast conditions
+    if (
+      c.includes("cloud") ||
+      c.includes("overcast") ||
+      c.includes("mist") ||
+      c.includes("fog") ||
+      c.includes("haze") ||
+      c.includes("freezing fog") ||
+      c.includes("patchy snow") ||
+      c.includes("blowing snow")
+    ) {
+      return "cloud";
+    }
+
+    // Default to "cloud" if not specifically categorized
+    return "cloud";
+  }
 
   useEffect(() => {
     const token = getToken();
@@ -173,7 +257,7 @@ export default function Home() {
                 )}
               </div>
 
-              <div style={{ position: "absolute", right: 16, bottom: 16 }}>
+              <div style={{ position: "absolute", right: 16, bottom: 32 }}>
                 {!hasEnteredNeighborhood && (
                   <button
                     onClick={() => setShowNeighborhoodPopup(true)}
@@ -206,105 +290,164 @@ export default function Home() {
                     paddingLeft: 32,
                     paddingTop: 32,
                     paddingRight: 32,
+                    paddingBottom: 32,
+                    height: "100%",
+                    justifyContent: "space-between",
                   }}
                 >
-                  <img
-                    style={{ width: 250, imageRendering: "pixelated" }}
-                    src="./neighborhoodLogo.png"
-                  />
-                  {menuItems.map((item) => (
+                  <div>
+                    <img
+                      style={{ width: 250, imageRendering: "pixelated" }}
+                      src="./neighborhoodLogo.png"
+                    />
+                    {menuItems.map((item) => (
+                      <div
+                        key={item.id}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "8px",
+                          cursor: isLoading ? "wait" : "pointer",
+                          opacity: isLoading ? 0.5 : 1,
+                        }}
+                        onMouseEnter={() =>
+                          !isLoading && setSelectedItem(item.id)
+                        }
+                        onMouseLeave={() => {}}
+                        onClick={() =>
+                          !isLoading && handleMenuItemClick(item.id)
+                        }
+                      >
+                        <span
+                          style={{
+                            fontFamily: "M PLUS Rounded 1c",
+                            fontSize: "24px",
+                            color: "#FFF9E6",
+                            visibility:
+                              selectedItem === item.id ? "visible" : "hidden",
+                            animation:
+                              selectedItem === item.id
+                                ? "blink 1s steps(1) infinite"
+                                : "none",
+                            fontWeight: "bold",
+                          }}
+                        >
+                          {"●"}
+                        </span>
+                        <p
+                          style={{
+                            fontFamily: "M PLUS Rounded 1c",
+                            fontSize: "32px",
+                            color: "#F5F7E1",
+                            fontWeight: "bold",
+                          }}
+                        >
+                          {item.text}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                  <div
+                    style={{
+                      padding: "8px 16px",
+                      fontFamily: "M PLUS Rounded 1c",
+                      fontSize: "24px",
+                      border: "1px solid #FFF9E6",
+                      background: "none",
+                      cursor: "pointer",
+                      backgroundColor: "#007C74",
+                      backgroundColor: "#007C74",
+                      display: "flex",
+                      flexDirection: "row",
+                      color: "#FFF9E6",
+                      fontWeight: "bold",
+                      borderRadius: "8px",
+                      width: "fit-content",
+                    }}
+                  >
+                    {/* Time Display */}
                     <div
-                      key={item.id}
                       style={{
                         display: "flex",
                         alignItems: "center",
-                        gap: "8px",
-                        cursor: isLoading ? "wait" : "pointer",
-                        opacity: isLoading ? 0.5 : 1,
                       }}
-                      onMouseEnter={() =>
-                        !isLoading && setSelectedItem(item.id)
-                      }
-                      onMouseLeave={() => {}}
-                      onClick={() => !isLoading && handleMenuItemClick(item.id)}
                     >
-                      <span
+                      <p
                         style={{
                           fontFamily: "M PLUS Rounded 1c",
                           fontSize: "24px",
                           color: "#FFF9E6",
-                          visibility:
-                            selectedItem === item.id ? "visible" : "hidden",
-                          animation:
-                            selectedItem === item.id
-                              ? "blink 1s steps(1) infinite"
-                              : "none",
                           fontWeight: "bold",
+                          margin: 0,
                         }}
                       >
-                        {"●"}
-                      </span>
-                      <p
+                        {currentTime}
+                      </p>
+                      <span
                         style={{
                           fontFamily: "M PLUS Rounded 1c",
-                          fontSize: "32px",
-                          color: "#F5F7E1",
+                          fontSize: "16px",
+                          color: "#6c5434",
+                          marginLeft: "4px",
                           fontWeight: "bold",
                         }}
                       >
-                        {item.text}
-                      </p>
+                        {isAM ? "am" : "pm"}
+                      </span>
                     </div>
-                  ))}
+
+                    {/* Weather Icon */}
+                    <div className="weathericon">{weatherTexture}</div>
+                  </div>
                 </div>
               )}
             </div>
+            <style jsx global>{`
+              @keyframes blink {
+                0% {
+                  visibility: visible;
+                }
+                50% {
+                  visibility: hidden;
+                }
+                100% {
+                  visibility: visible;
+                }
+              }
+
+              @keyframes popIn {
+                0% {
+                  opacity: 0;
+                  transform: scale(0.95);
+                }
+                100% {
+                  opacity: 1;
+                  transform: scale(1);
+                }
+              }
+
+              @keyframes popOut {
+                0% {
+                  opacity: 1;
+                  transform: scale(1);
+                }
+                100% {
+                  opacity: 0;
+                  transform: scale(0.95);
+                }
+              }
+
+              .pop-in {
+                animation: popIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+              }
+
+              .pop-in.hidden {
+                animation: popOut 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+                opacity: 0;
+                transform: scale(0.95);
+              }
+            `}</style>
           </div>
-          <style jsx global>{`
-            @keyframes blink {
-              0% {
-                visibility: visible;
-              }
-              50% {
-                visibility: hidden;
-              }
-              100% {
-                visibility: visible;
-              }
-            }
-
-            @keyframes popIn {
-              0% {
-                opacity: 0;
-                transform: scale(0.95);
-              }
-              100% {
-                opacity: 1;
-                transform: scale(1);
-              }
-            }
-
-            @keyframes popOut {
-              0% {
-                opacity: 1;
-                transform: scale(1);
-              }
-              100% {
-                opacity: 0;
-                transform: scale(0.95);
-              }
-            }
-
-            .pop-in {
-              animation: popIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-            }
-
-            .pop-in.hidden {
-              animation: popOut 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-              opacity: 0;
-              transform: scale(0.95);
-            }
-          `}</style>
         </>
       ) : (
         <SignupComponent />
