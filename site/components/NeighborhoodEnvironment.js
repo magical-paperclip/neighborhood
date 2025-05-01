@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader";
 import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
@@ -13,6 +13,7 @@ const PastelVibrantShader = {
     brightness: { value: 1.05 }, // Slight brightness boost
     pastelAmount: { value: 0.2 }, // Controls how pastel the colors appear
     warmth: { value: 0.05 }, // Slight warm tint
+    opacity: { value: 1.0 }, // Added for fade in effect
   },
   vertexShader: `
     varying vec2 vUv;
@@ -27,6 +28,7 @@ const PastelVibrantShader = {
     uniform float brightness;
     uniform float pastelAmount;
     uniform float warmth;
+    uniform float opacity;
     varying vec2 vUv;
 
     vec3 rgb2hsv(vec3 c) {
@@ -72,7 +74,8 @@ const PastelVibrantShader = {
       // Soften contrast slightly
       rgb = mix(vec3(0.5), rgb, 0.9);
 
-      gl_FragColor = vec4(rgb, texel.a);
+      // Apply fade in opacity
+      gl_FragColor = vec4(rgb, texel.a * opacity);
     }
   `,
 };
@@ -168,6 +171,11 @@ export default function NeighborhoodEnvironment({
   const mixerRef = useRef(null);
   const currentActionRef = useRef(null);
   const animationsRef = useRef(null);
+  const fadeTimeRef = useRef(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const composerRef = useRef(null);
+  const pastelPassRef = useRef(null);
+
   const keysRef = useRef({
     w: false,
     a: false,
@@ -184,23 +192,23 @@ export default function NeighborhoodEnvironment({
     // Camera settings
     const cameraSettings = {
       start: {
-        position: new THREE.Vector3(4, 6, 3), // Increased height and distance
-        lookAt: new THREE.Vector3(-0.5, 2.4, 0), // Keep the same look target
-        fov: 45, // Zoomed in FOV for close-up
+        position: new THREE.Vector3(1, 20, 1), // High aerial position directly above
+        lookAt: new THREE.Vector3(0, 5, 0), // Looking down at the scene center
+        fov: 60, // Wider FOV for the overhead view
       },
       end: {
-        position: new THREE.Vector3(0, 6, 12), // Doubled distance and increased height
-        offset: new THREE.Vector3(0, 6, 12), // Matching offset
-        fov: 70, // Slightly adjusted FOV
+        position: new THREE.Vector3(0, -30, 0), // Regular gameplay position
+        offset: new THREE.Vector3(0, 20, 12), // Matching offset
+        fov: 70, // Gameplay FOV
       },
     };
 
     // Add a lookAt target for gameplay that's ahead of the player
     const gameplayLookAtOffset = new THREE.Vector3(0, 2, 0); // Look further ahead and up
 
-    // Setup scene with Animal Crossing sky color
+    // Setup scene with black background initially
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x88d7ee); // Lighter blue like Animal Crossing
+    scene.background = new THREE.Color(0x000000); // Start with black
 
     // Add fog that matches sky color for smooth distance fading
     const fogColor = new THREE.Color(0x88d7ee);
@@ -245,14 +253,15 @@ export default function NeighborhoodEnvironment({
     });
     renderer.setPixelRatio(window.devicePixelRatio);
     renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.setClearColor(0x000000, 0);
+    renderer.setClearColor(0x000000, 1); // Start with black
 
     if (containerRef.current) {
       containerRef.current.appendChild(renderer.domElement);
     }
 
-    // Setup post-processing - MOVED AFTER RENDERER INITIALIZATION
+    // Setup post-processing
     const composer = new EffectComposer(renderer);
+    composerRef.current = composer;
     const renderPass = new RenderPass(scene, camera);
     composer.addPass(renderPass);
 
@@ -272,12 +281,29 @@ export default function NeighborhoodEnvironment({
     pastelPass.uniforms.brightness.value = 0.8; // Slight brightness boost
     pastelPass.uniforms.pastelAmount.value = 1.4; // Adjust for more/less pastel effect
     pastelPass.uniforms.warmth.value = 0.05; // Subtle warm tint like Animal Crossing
+    pastelPass.uniforms.opacity.value = 0.0; // Start fully transparent
+    pastelPassRef.current = pastelPass;
 
     // Add as the last pass for best results
     composer.addPass(pastelPass);
+
+    // Loading counter to track all assets
+    let assetsToLoad = 3; // Map, player model, texture
+    let assetsLoaded = 0;
+
+    const checkAllLoaded = () => {
+      assetsLoaded++;
+      if (assetsLoaded === assetsToLoad) {
+        // All assets are loaded, start fade in
+        setIsLoading(false);
+        fadeTimeRef.current = Date.now();
+        scene.background = new THREE.Color(0x88d7ee); // Now set the sky color
+      }
+    };
+
     // Load and configure the texture
     const textureLoader = new THREE.TextureLoader();
-    const texture = textureLoader.load("/animal-crossing.png");
+    const texture = textureLoader.load("/animal-crossing.png", checkAllLoaded);
     texture.wrapS = THREE.RepeatWrapping;
     texture.wrapT = THREE.RepeatWrapping;
     texture.repeat.set(500, 500);
@@ -323,7 +349,6 @@ export default function NeighborhoodEnvironment({
         mapModel.position.set(0.0, -0.01, 0.0);
         scene.add(gltf.scene);
         // Add toon shading to existing materials
-        //THREE.ColorManagement.legacyMode = false
         mapModel.traverse((child) => {
           if (child.isMesh) {
             const originalMaterial = child.material;
@@ -340,10 +365,12 @@ export default function NeighborhoodEnvironment({
             child.material = toonMaterial;
           }
         });
+        checkAllLoaded();
       },
       undefined,
       function (error) {
         console.error(error);
+        checkAllLoaded(); // Still count as loaded even if error
       },
     );
 
@@ -358,7 +385,7 @@ export default function NeighborhoodEnvironment({
       (gltf) => {
         playerModel = gltf.scene;
         playerModel.scale.set(0.027, 0.027, 0.027);
-        playerModel.rotation.y = (Math.PI / 4) * -1; // Rotate 180 degrees to face backward
+        playerModel.rotation.y = (Math.PI / -4) * -2; // Rotate 180 degrees to face backward
 
         // Add toon shading to existing materials
         playerModel.traverse((child) => {
@@ -399,12 +426,14 @@ export default function NeighborhoodEnvironment({
 
         container.add(playerModel);
         playerRef.current = playerModel;
+        checkAllLoaded();
       },
       (xhr) => {
         console.log((xhr.loaded / xhr.total) * 100 + "% loaded");
       },
       (error) => {
         console.error("An error occurred while loading the model:", error);
+        checkAllLoaded(); // Still count as loaded even if error
       },
     );
 
@@ -429,7 +458,7 @@ export default function NeighborhoodEnvironment({
 
     // Handle keyboard controls
     const handleKeyDown = (event) => {
-      if (!hasEnteredNeighborhood) return;
+      if (!hasEnteredNeighborhood || isLoading) return;
 
       switch (event.key.toLowerCase()) {
         case "w":
@@ -500,6 +529,23 @@ export default function NeighborhoodEnvironment({
       if (!startTimeRef.current) startTimeRef.current = timestamp;
       const progress = Math.min((timestamp - startTimeRef.current) / 1000, 1);
 
+      // Handle fade in after loading
+      if (!isLoading && fadeTimeRef.current) {
+        const fadeProgress = Math.min(
+          (Date.now() - fadeTimeRef.current) / 2000,
+          1,
+        );
+
+        if (pastelPassRef.current) {
+          pastelPassRef.current.uniforms.opacity.value = fadeProgress;
+        }
+
+        // Once fade is complete, remove the reference to stop calculating
+        if (fadeProgress === 1) {
+          fadeTimeRef.current = null;
+        }
+      }
+
       // Update animation mixer
       if (mixerRef.current && animationsRef.current) {
         const deltaTime = (timestamp - startTimeRef.current) / 1000;
@@ -547,7 +593,8 @@ export default function NeighborhoodEnvironment({
           ? 4 * progress * progress * progress
           : 1 - Math.pow(-2 * progress + 2, 3) / 2;
 
-      if (hasEnteredNeighborhood) {
+      // Only allow movement and camera controls after loading
+      if (hasEnteredNeighborhood && !isLoading) {
         // Update container position and rotation based on keys
         if (playerRef.current) {
           const { moveSpeed, sprintSpeed, rotationSpeed, gravity } =
@@ -646,7 +693,7 @@ export default function NeighborhoodEnvironment({
           }
         }
       } else {
-        // Reset player and camera positions when exiting
+        // Reset player and camera positions when exiting or loading
         if (playerRef.current) {
           playerRef.current.position.set(0, 0, 0);
         }
@@ -680,8 +727,8 @@ export default function NeighborhoodEnvironment({
       }
 
       composer.render(); // Use composer instead of renderer
-      animationRef.current = requestAnimationFrame(animate);
       animateClouds();
+      animationRef.current = requestAnimationFrame(animate);
     };
 
     // Add event listeners
@@ -729,7 +776,7 @@ export default function NeighborhoodEnvironment({
       renderer.dispose();
       composer.dispose(); // Dispose composer too
     };
-  }, [hasEnteredNeighborhood]);
+  }, [hasEnteredNeighborhood, isLoading]);
 
   return (
     <div
@@ -742,6 +789,20 @@ export default function NeighborhoodEnvironment({
         height: "100%",
         zIndex: -1,
       }}
-    />
+    >
+      {isLoading && (
+        <div
+          style={{
+            position: "absolute",
+            top: "50%",
+            left: "50%",
+            transform: "translate(-50%, -50%)",
+            color: "white",
+            fontSize: "16px",
+            textAlign: "center",
+          }}
+        ></div>
+      )}
+    </div>
   );
 }
