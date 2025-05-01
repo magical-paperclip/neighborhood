@@ -6,6 +6,7 @@ import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
 import { ShaderPass } from "three/examples/jsm/postprocessing/ShaderPass.js";
 
+// Custom shader for pastel vibrant look
 const PastelVibrantShader = {
   uniforms: {
     tDiffuse: { value: null },
@@ -80,6 +81,7 @@ const PastelVibrantShader = {
   `,
 };
 
+// Function to create clouds
 function createClouds(scene) {
   const cloudGroup = new THREE.Group();
   scene.add(cloudGroup);
@@ -189,30 +191,30 @@ export default function NeighborhoodEnvironment({
   useEffect(() => {
     if (typeof window === "undefined") return;
 
-    // Camera settings
+    // Camera settings from the original code
     const cameraSettings = {
       start: {
-        position: new THREE.Vector3(1, 20, 1), // High aerial position directly above
-        lookAt: new THREE.Vector3(2.2, 5, 0), // Looking down at the scene center
-        fov: 60, // Wider FOV for the overhead view
+        position: new THREE.Vector3(2, 3, 1), // Positioned to the right (+x) while staying close
+        lookAt: new THREE.Vector3(-0.5, 2.4, 0), // Looking slightly left to keep character in frame
+        fov: 45, // Zoomed in FOV for close-up
       },
       end: {
-        position: new THREE.Vector3(200, -30, 200), // Regular gameplay position
-        offset: new THREE.Vector3(0, 20, 120), // Matching offset
-        fov: 70, // Gameplay FOV
+        position: new THREE.Vector3(0, 3, 6), // Centered position
+        offset: new THREE.Vector3(0, 3, 6), // Matching offset
+        fov: 75, // Wider FOV for gameplay
       },
     };
 
     // Add a lookAt target for gameplay that's ahead of the player
     const gameplayLookAtOffset = new THREE.Vector3(0, 2, 0); // Look further ahead and up
 
-    // Setup scene with black background initially
+    // Setup scene with black background initially (for fade-in effect)
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x000000); // Start with black
 
-    // Add fog that matches sky color for smooth distance fading
-    const fogColor = new THREE.Color(0x88d7ee);
-    scene.fog = new THREE.Fog(fogColor, 60, 140); // Start fading at 80 units, complete fade by 140 units
+    // Add fog for distance fading with a pastel color
+    const fogColor = new THREE.Color(0xfff0e0); // Warm pastel fog color
+    scene.fog = new THREE.FogExp2(fogColor, 0.01); // Exponential fog for softer distance falloff
 
     // Create a container for the camera and player
     const container = new THREE.Object3D();
@@ -229,11 +231,9 @@ export default function NeighborhoodEnvironment({
     camera.position.copy(cameraSettings.start.position);
     scene.add(camera); // Add to scene, not container
 
-    // Enhanced lighting setup
-    const ambientLight = new THREE.AmbientLight(0xf4ccff, 1.0);
+    // Enhanced lighting setup with warmer tones
+    const ambientLight = new THREE.AmbientLight(0xf4ccff, 1.0); // Slight purple tint for ambient light
     scene.add(ambientLight);
-
-    scene.fog = new THREE.FogExp2(0xfff0e0, 0.01);
 
     // Add directional light for better shadows and definition
     const dirLight = new THREE.DirectionalLight(0xffffff, 1.0);
@@ -265,6 +265,7 @@ export default function NeighborhoodEnvironment({
     const renderPass = new RenderPass(scene, camera);
     composer.addPass(renderPass);
 
+    // Add bloom effect for that dreamy glow
     const bloomPass = new UnrealBloomPass(
       new THREE.Vector2(window.innerWidth, window.innerHeight),
       0.8, // strength
@@ -273,19 +274,31 @@ export default function NeighborhoodEnvironment({
     );
     composer.addPass(bloomPass);
 
-    // Create floor plane with Animal Crossing grass color
-    const planeGeometry = new THREE.PlaneGeometry(1000, 1000);
-
+    // Add custom pastel shader for vibrant Animal Crossing style
     const pastelPass = new ShaderPass(PastelVibrantShader);
     pastelPass.uniforms.saturation.value = 1.2; // Higher for more vibrant colors
     pastelPass.uniforms.brightness.value = 0.8; // Slight brightness boost
     pastelPass.uniforms.pastelAmount.value = 1.4; // Adjust for more/less pastel effect
-    pastelPass.uniforms.warmth.value = 0.05; // Subtle warm tint like Animal Crossing
+    pastelPass.uniforms.warmth.value = 0.05; // Subtle warm tint
     pastelPass.uniforms.opacity.value = 0.0; // Start fully transparent
     pastelPassRef.current = pastelPass;
 
     // Add as the last pass for best results
     composer.addPass(pastelPass);
+
+    // Create clouds
+    const clouds = createClouds(scene);
+
+    // Function to animate clouds
+    const animateClouds = () => {
+      clouds.children.forEach((cloudCluster, i) => {
+        // Make clouds slowly drift
+        cloudCluster.position.x +=
+          Math.sin(Date.now() * 0.0001 + i * 0.1) * 0.01;
+        cloudCluster.position.z +=
+          Math.cos(Date.now() * 0.0001 + i * 0.1) * 0.01;
+      });
+    };
 
     // Loading counter to track all assets
     let assetsToLoad = 3; // Map, player model, texture
@@ -297,9 +310,12 @@ export default function NeighborhoodEnvironment({
         // All assets are loaded, start fade in
         setIsLoading(false);
         fadeTimeRef.current = Date.now();
-        scene.background = new THREE.Color(0x88d7ee); // Now set the sky color
+        scene.background = new THREE.Color(0x88d7ee); // Set sky color
       }
     };
+
+    // Create floor plane with Animal Crossing grass color
+    const planeGeometry = new THREE.PlaneGeometry(1000, 1000);
 
     // Load and configure the texture
     const textureLoader = new THREE.TextureLoader();
@@ -323,24 +339,11 @@ export default function NeighborhoodEnvironment({
     plane.position.y = 0;
     scene.add(plane);
 
-    const clouds = createClouds(scene);
-    // Optionally animate the clouds
-    const animateClouds = () => {
-      clouds.children.forEach((cloudCluster, i) => {
-        // Make clouds slowly drift
-        cloudCluster.position.x +=
-          Math.sin(Date.now() * 0.0001 + i * 0.1) * 0.01;
-        cloudCluster.position.z +=
-          Math.cos(Date.now() * 0.0001 + i * 0.1) * 0.01;
-      });
-    };
-
+    // Load map model
     let mapModel = null;
-
     const maploader = new GLTFLoader();
     maploader.setPath("/models/");
 
-    //load map
     maploader.load(
       "sf_map_3.glb",
       function (gltf) {
@@ -348,6 +351,7 @@ export default function NeighborhoodEnvironment({
         mapModel.scale.set(3.0, 3.0, 3.0);
         mapModel.position.set(0.0, -0.01, 0.0);
         scene.add(gltf.scene);
+
         // Add toon shading to existing materials
         mapModel.traverse((child) => {
           if (child.isMesh) {
@@ -375,17 +379,16 @@ export default function NeighborhoodEnvironment({
     );
 
     // Load player model with materials
+    let playerModel = null;
     const gltfLoader = new GLTFLoader();
     gltfLoader.setPath("/models/");
-
-    let playerModel = null;
 
     gltfLoader.load(
       "player.glb",
       (gltf) => {
         playerModel = gltf.scene;
         playerModel.scale.set(0.027, 0.027, 0.027);
-        playerModel.rotation.y = (Math.PI / -4) * -2; // Rotate 180 degrees to face backward
+        playerModel.rotation.y = (Math.PI / 4) * -1; // Rotate to face backward
 
         // Add toon shading to existing materials
         playerModel.traverse((child) => {
@@ -593,7 +596,6 @@ export default function NeighborhoodEnvironment({
           ? 4 * progress * progress * progress
           : 1 - Math.pow(-2 * progress + 2, 3) / 2;
 
-      // Only allow movement and camera controls after loading
       if (hasEnteredNeighborhood && !isLoading) {
         // Update container position and rotation based on keys
         if (playerRef.current) {
@@ -643,21 +645,21 @@ export default function NeighborhoodEnvironment({
             }
           }
 
-          // Update camera position relative to container
+          // Update camera position relative to container - using exact logic from old code
           if (progress === 1) {
             // Position camera behind player based on container's rotation
             const cameraAngle = container.rotation.y;
-            const distance = 12; // Increased from 6 to 12
-            const height = 6; // Increased from 3 to 6
+            const distance = 6;
+            const height = 3;
 
-            // Position camera directly behind player with increased distance
+            // Position camera directly behind player
             camera.position.set(
               container.position.x - Math.sin(cameraAngle) * distance,
               container.position.y + height,
               container.position.z - Math.cos(cameraAngle) * distance,
             );
 
-            // Look ahead of player with adjusted offset
+            // Look ahead of player
             const lookAtTarget = new THREE.Vector3(
               container.position.x +
                 Math.sin(cameraAngle) * gameplayLookAtOffset.z,
@@ -670,12 +672,12 @@ export default function NeighborhoodEnvironment({
             // During transition
             const currentPosition = new THREE.Vector3();
             currentPosition.lerpVectors(
-              new THREE.Vector3(
-                -Math.sin(container.rotation.y) * 8, // Adjusted for new perspective
-                6, // Higher position
-                -Math.cos(container.rotation.y) * 8, // Adjusted for new perspective
-              ),
               cameraSettings.start.position,
+              new THREE.Vector3(
+                container.position.x - Math.sin(container.rotation.y) * 4,
+                container.position.y + 4, // Match the new height
+                container.position.z - Math.cos(container.rotation.y) * 4,
+              ),
               eased,
             );
             camera.position.copy(currentPosition);
@@ -693,7 +695,7 @@ export default function NeighborhoodEnvironment({
           }
         }
       } else {
-        // Reset player and camera positions when exiting or loading
+        // Reset player and camera positions when exiting
         if (playerRef.current) {
           playerRef.current.position.set(0, 0, 0);
         }
@@ -703,15 +705,15 @@ export default function NeighborhoodEnvironment({
           container.rotation.set(0, 0, 0);
         }
 
-        // Transition camera back to starting position
+        // Transition camera back to starting position - using logic from old code
         const currentPosition = new THREE.Vector3();
         currentPosition.lerpVectors(
-          cameraSettings.start.position,
           new THREE.Vector3(
-            container.position.x - Math.sin(container.rotation.y) * 12, // Match the new distance
-            container.position.y + 6, // Match the new height
-            container.position.z - Math.cos(container.rotation.y) * 12, // Match the new distance
+            -Math.sin(container.rotation.y) * 4,
+            4, // Updated height
+            -Math.cos(container.rotation.y) * 4,
           ),
+          cameraSettings.start.position,
           eased,
         );
         camera.position.copy(currentPosition);
@@ -726,8 +728,12 @@ export default function NeighborhoodEnvironment({
         camera.lookAt(currentLookAt);
       }
 
-      composer.render(); // Use composer instead of renderer
+      // Animate clouds
       animateClouds();
+
+      // Render using composer instead of renderer to apply all post-processing effects
+      composer.render();
+
       animationRef.current = requestAnimationFrame(animate);
     };
 
@@ -774,7 +780,7 @@ export default function NeighborhoodEnvironment({
       plane.geometry.dispose();
       plane.material.dispose();
       renderer.dispose();
-      composer.dispose(); // Dispose composer too
+      composer.dispose(); // Properly dispose composer
     };
   }, [hasEnteredNeighborhood, isLoading]);
 
