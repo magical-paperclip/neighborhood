@@ -196,7 +196,7 @@ export default function KaiLing() {
             width: "100%",
             height: "150px",
             backgroundColor: "#c1ffc1",
-            backgroundImage: "url('bulletinbox1background.png')",
+            backgroundImage: "url('./bulletinbox1background.png')",
             backgroundSize: "cover",
             border: "5px dashed #cdc1ff",
             borderRadius: "8px",
