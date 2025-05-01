@@ -34,11 +34,11 @@ export default function Home() {
     let downloadUrl = '';
 
     if (userAgent.includes('mac')) {
-      downloadUrl = 'https://hc-juice.s3.us-east-1.amazonaws.com/releases/latest/Neighborhood-windows.zip?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIA4OCVI72O3OBXDBNZ%2F20250430%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20250430T204810Z&X-Amz-Expires=604800&X-Amz-SignedHeaders=host&X-Amz-Signature=2a1e6858e5852a6cd4d33237a4a3c540ea6d51511d8cce1fb7f1019018e0bfa5';
+      downloadUrl = 'https://kodan-videos.s3.us-east-2.amazonaws.com/Neighborhood.dmg';
     } else if (userAgent.includes('win')) {
-      downloadUrl = 'https://hc-juice.s3.us-east-1.amazonaws.com/releases/latest/Neighborhood-windows.zip?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIA4OCVI72O3OBXDBNZ%2F20250430%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20250430T204810Z&X-Amz-Expires=604800&X-Amz-SignedHeaders=host&X-Amz-Signature=2a1e6858e5852a6cd4d33237a4a3c540ea6d51511d8cce1fb7f1019018e0bfa5';
+      downloadUrl = 'https://kodan-videos.s3.us-east-2.amazonaws.com/Neighborhood-win32-x64.zip';
     } else if (userAgent.includes('linux')) {
-      downloadUrl = 'https://hc-juice.s3.us-east-1.amazonaws.com/releases/latest/Neighborhood-windows.zip?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIA4OCVI72O3OBXDBNZ%2F20250430%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20250430T204810Z&X-Amz-Expires=604800&X-Amz-SignedHeaders=host&X-Amz-Signature=2a1e6858e5852a6cd4d33237a4a3c540ea6d51511d8cce1fb7f1019018e0bfa5';
+      downloadUrl = 'https://kodan-videos.s3.us-east-2.amazonaws.com/Neighborhood-linux-x64.tar.gz';
     } else {
       // Mobile device - no download, just show message
       return;
