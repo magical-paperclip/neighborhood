@@ -140,13 +140,13 @@ export default function Home() {
   }, [hasEnteredNeighborhood]);
 
   useEffect(() => {
-    if (!UIPage && backgroundMusic.current) {
+    if (isSignedIn && !UIPage && backgroundMusic.current) {
       backgroundMusic.current.play();
     } else if (backgroundMusic.current) {
       backgroundMusic.current.pause();
       backgroundMusic.current.currentTime = 0;
     }
-  }, [UIPage]);
+  }, [UIPage, isSignedIn]);
 
   const playBanjoSound = () => {
     if (banjoSound.current) {
