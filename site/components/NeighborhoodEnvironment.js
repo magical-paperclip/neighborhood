@@ -1,6 +1,129 @@
 import { useEffect, useRef } from "react";
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader";
+import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
+import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
+import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
+import { ShaderPass } from "three/examples/jsm/postprocessing/ShaderPass.js";
+
+const PastelVibrantShader = {
+  uniforms: {
+    tDiffuse: { value: null },
+    saturation: { value: 1.4 }, // Increased saturation
+    brightness: { value: 1.05 }, // Slight brightness boost
+    pastelAmount: { value: 0.2 }, // Controls how pastel the colors appear
+    warmth: { value: 0.05 }, // Slight warm tint
+  },
+  vertexShader: `
+    varying vec2 vUv;
+    void main() {
+      vUv = uv;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }
+  `,
+  fragmentShader: `
+    uniform sampler2D tDiffuse;
+    uniform float saturation;
+    uniform float brightness;
+    uniform float pastelAmount;
+    uniform float warmth;
+    varying vec2 vUv;
+
+    vec3 rgb2hsv(vec3 c) {
+      vec4 K = vec4(0.0, -1.0 / 3.0, 2.0 / 3.0, -1.0);
+      vec4 p = mix(vec4(c.bg, K.wz), vec4(c.gb, K.xy), step(c.b, c.g));
+      vec4 q = mix(vec4(p.xyw, c.r), vec4(c.r, p.yzx), step(p.x, c.r));
+
+      float d = q.x - min(q.w, q.y);
+      float e = 1.0e-10;
+      return vec3(abs(q.z + (q.w - q.y) / (6.0 * d + e)), d / (q.x + e), q.x);
+    }
+
+    vec3 hsv2rgb(vec3 c) {
+      vec4 K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
+      vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
+      return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
+    }
+
+    void main() {
+      vec4 texel = texture2D(tDiffuse, vUv);
+
+      // Convert to HSV
+      vec3 hsv = rgb2hsv(texel.rgb);
+
+      // Adjust saturation while preserving luminance
+      hsv.y = clamp(hsv.y * saturation, 0.0, 1.0);
+
+      // Pastel effect: slightly reduce saturation for brighter colors
+      // and increase value to create that pastel look
+      hsv.y = mix(hsv.y, hsv.y * (1.0 - hsv.z * 0.3), pastelAmount);
+      hsv.z = mix(hsv.z, 1.0 - (1.0 - hsv.z) * 0.7, pastelAmount);
+
+      // Convert back to RGB
+      vec3 rgb = hsv2rgb(hsv);
+
+      // Adjust brightness
+      rgb *= brightness;
+
+      // Add warmth (slight yellow/orange tint)
+      rgb.r += warmth;
+      rgb.g += warmth * 0.7;
+
+      // Soften contrast slightly
+      rgb = mix(vec3(0.5), rgb, 0.9);
+
+      gl_FragColor = vec4(rgb, texel.a);
+    }
+  `,
+};
+
+function createClouds(scene) {
+  const cloudGroup = new THREE.Group();
+  scene.add(cloudGroup);
+
+  const cloudGeometry = new THREE.SphereGeometry(1, 10, 10);
+  const cloudMaterial = new THREE.MeshToonMaterial({
+    color: 0xffffff,
+    gradientMap: createToonGradient(),
+    transparent: true,
+    opacity: 0.9,
+    emissive: 0xffffee,
+    emissiveIntensity: 0.1,
+  });
+
+  // Create several clouds at different positions
+  for (let i = 0; i < 40; i++) {
+    const cloudCluster = new THREE.Group();
+
+    // Random position within bounds
+    const x = Math.random() * 180 - 90;
+    const z = Math.random() * 180 - 90;
+    const y = Math.random() * 5 + 25; // Higher altitude
+
+    cloudCluster.position.set(x, y, z);
+
+    // Create a cluster of spheres for each cloud
+    const segments = 3 + Math.floor(Math.random() * 5);
+    for (let j = 0; j < segments; j++) {
+      const cloudPart = new THREE.Mesh(cloudGeometry, cloudMaterial);
+
+      // Random scale for each part
+      const scale = 3 + Math.random() * 4;
+      cloudPart.scale.set(scale, scale * 0.6, scale);
+
+      // Position within cluster
+      cloudPart.position.x = (Math.random() - 0.5) * 5;
+      cloudPart.position.z = (Math.random() - 0.5) * 5;
+      cloudPart.position.y = (Math.random() - 0.5) * 2;
+
+      cloudCluster.add(cloudPart);
+    }
+
+    cloudGroup.add(cloudCluster);
+  }
+
+  return cloudGroup;
+}
 
 // Function to create a toon gradient texture
 function createToonGradient() {
@@ -61,14 +184,14 @@ export default function NeighborhoodEnvironment({
     // Camera settings
     const cameraSettings = {
       start: {
-        position: new THREE.Vector3(2, 3, 1), // Positioned to the right (+x) while staying close
-        lookAt: new THREE.Vector3(-0.5, 2.4, 0), // Looking slightly left to keep character in frame
+        position: new THREE.Vector3(4, 6, 3), // Increased height and distance
+        lookAt: new THREE.Vector3(-0.5, 2.4, 0), // Keep the same look target
         fov: 45, // Zoomed in FOV for close-up
       },
       end: {
-        position: new THREE.Vector3(0, 3, 6), // Centered position
-        offset: new THREE.Vector3(0, 3, 6), // Matching offset
-        fov: 75, // Wider FOV for gameplay
+        position: new THREE.Vector3(0, 6, 12), // Doubled distance and increased height
+        offset: new THREE.Vector3(0, 6, 12), // Matching offset
+        fov: 70, // Slightly adjusted FOV
       },
     };
 
@@ -102,6 +225,8 @@ export default function NeighborhoodEnvironment({
     const ambientLight = new THREE.AmbientLight(0xf4ccff, 1.0);
     scene.add(ambientLight);
 
+    scene.fog = new THREE.FogExp2(0xfff0e0, 0.01);
+
     // Add directional light for better shadows and definition
     const dirLight = new THREE.DirectionalLight(0xffffff, 1.0);
     dirLight.position.set(5, 5, 5);
@@ -126,9 +251,30 @@ export default function NeighborhoodEnvironment({
       containerRef.current.appendChild(renderer.domElement);
     }
 
+    // Setup post-processing - MOVED AFTER RENDERER INITIALIZATION
+    const composer = new EffectComposer(renderer);
+    const renderPass = new RenderPass(scene, camera);
+    composer.addPass(renderPass);
+
+    const bloomPass = new UnrealBloomPass(
+      new THREE.Vector2(window.innerWidth, window.innerHeight),
+      0.8, // strength
+      0.4, // radius
+      0.85, // threshold
+    );
+    composer.addPass(bloomPass);
+
     // Create floor plane with Animal Crossing grass color
     const planeGeometry = new THREE.PlaneGeometry(1000, 1000);
 
+    const pastelPass = new ShaderPass(PastelVibrantShader);
+    pastelPass.uniforms.saturation.value = 1.2; // Higher for more vibrant colors
+    pastelPass.uniforms.brightness.value = 0.8; // Slight brightness boost
+    pastelPass.uniforms.pastelAmount.value = 1.4; // Adjust for more/less pastel effect
+    pastelPass.uniforms.warmth.value = 0.05; // Subtle warm tint like Animal Crossing
+
+    // Add as the last pass for best results
+    composer.addPass(pastelPass);
     // Load and configure the texture
     const textureLoader = new THREE.TextureLoader();
     const texture = textureLoader.load("/animal-crossing.png");
@@ -150,6 +296,18 @@ export default function NeighborhoodEnvironment({
     plane.rotation.x = Math.PI / 2;
     plane.position.y = 0;
     scene.add(plane);
+
+    const clouds = createClouds(scene);
+    // Optionally animate the clouds
+    const animateClouds = () => {
+      clouds.children.forEach((cloudCluster, i) => {
+        // Make clouds slowly drift
+        cloudCluster.position.x +=
+          Math.sin(Date.now() * 0.0001 + i * 0.1) * 0.01;
+        cloudCluster.position.z +=
+          Math.cos(Date.now() * 0.0001 + i * 0.1) * 0.01;
+      });
+    };
 
     let mapModel = null;
 
@@ -334,6 +492,7 @@ export default function NeighborhoodEnvironment({
       camera.aspect = window.innerWidth / window.innerHeight;
       camera.updateProjectionMatrix();
       renderer.setSize(window.innerWidth, window.innerHeight);
+      composer.setSize(window.innerWidth, window.innerHeight); // Update composer size too
     };
 
     // Animation
@@ -441,17 +600,17 @@ export default function NeighborhoodEnvironment({
           if (progress === 1) {
             // Position camera behind player based on container's rotation
             const cameraAngle = container.rotation.y;
-            const distance = 6;
-            const height = 3;
+            const distance = 12; // Increased from 6 to 12
+            const height = 6; // Increased from 3 to 6
 
-            // Position camera directly behind player
+            // Position camera directly behind player with increased distance
             camera.position.set(
               container.position.x - Math.sin(cameraAngle) * distance,
               container.position.y + height,
               container.position.z - Math.cos(cameraAngle) * distance,
             );
 
-            // Look ahead of player
+            // Look ahead of player with adjusted offset
             const lookAtTarget = new THREE.Vector3(
               container.position.x +
                 Math.sin(cameraAngle) * gameplayLookAtOffset.z,
@@ -464,12 +623,12 @@ export default function NeighborhoodEnvironment({
             // During transition
             const currentPosition = new THREE.Vector3();
             currentPosition.lerpVectors(
-              cameraSettings.start.position,
               new THREE.Vector3(
-                container.position.x - Math.sin(container.rotation.y) * 4,
-                container.position.y + 4, // Match the new height
-                container.position.z - Math.cos(container.rotation.y) * 4,
+                -Math.sin(container.rotation.y) * 8, // Adjusted for new perspective
+                6, // Higher position
+                -Math.cos(container.rotation.y) * 8, // Adjusted for new perspective
               ),
+              cameraSettings.start.position,
               eased,
             );
             camera.position.copy(currentPosition);
@@ -500,12 +659,12 @@ export default function NeighborhoodEnvironment({
         // Transition camera back to starting position
         const currentPosition = new THREE.Vector3();
         currentPosition.lerpVectors(
-          new THREE.Vector3(
-            -Math.sin(container.rotation.y) * 4,
-            4, // Updated height
-            -Math.cos(container.rotation.y) * 4,
-          ),
           cameraSettings.start.position,
+          new THREE.Vector3(
+            container.position.x - Math.sin(container.rotation.y) * 12, // Match the new distance
+            container.position.y + 6, // Match the new height
+            container.position.z - Math.cos(container.rotation.y) * 12, // Match the new distance
+          ),
           eased,
         );
         camera.position.copy(currentPosition);
@@ -520,8 +679,9 @@ export default function NeighborhoodEnvironment({
         camera.lookAt(currentLookAt);
       }
 
-      renderer.render(scene, camera);
+      composer.render(); // Use composer instead of renderer
       animationRef.current = requestAnimationFrame(animate);
+      animateClouds();
     };
 
     // Add event listeners
@@ -567,6 +727,7 @@ export default function NeighborhoodEnvironment({
       plane.geometry.dispose();
       plane.material.dispose();
       renderer.dispose();
+      composer.dispose(); // Dispose composer too
     };
   }, [hasEnteredNeighborhood]);
 
