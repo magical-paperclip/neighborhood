@@ -24,6 +24,7 @@ const HackTimeComponent = ({ isExiting, onClose, userData }) => {
   const [isLoadingCommits, setIsLoadingCommits] = useState({}); // Track loading state per project
   const [commitFetchErrors, setCommitFetchErrors] = useState({}); // Track fetch errors per project
   const [piano, setPiano] = useState(null);
+  const [playedMelodies, setPlayedMelodies] = useState(new Set());
 
   // Add debounce helper at the top level of the component
   const debounce = (func, wait) => {
@@ -950,6 +951,40 @@ const HackTimeComponent = ({ isExiting, onClose, userData }) => {
     return commitSessionTimes.length > 0 && commitSessionTimes.every(time => selectedSet.has(time));
   };
 
+  const playSessionMelody = (sessions, commitSha) => {
+    if (!piano || playedMelodies.has(commitSha)) return;
+
+    // Convert session duration to musical notes
+    // We'll use a pentatonic scale for a pleasant sound
+    const pentatonicScale = ['C4', 'D4', 'E4', 'G4', 'A4'];
+    
+    // Sort sessions by start time to create a chronological melody
+    const sortedSessions = [...sessions].sort((a, b) => a.start_time - b.start_time);
+    
+    // Play each session's note with a delay
+    sortedSessions.forEach((session, index) => {
+      // Use session duration to determine note length
+      const duration = Math.min(session.duration, 60); // Cap at 60 seconds
+      const noteLength = Math.max(0.2, duration / 60); // Convert to seconds, min 0.2s
+      
+      // Select note from pentatonic scale based on session index
+      const noteIndex = index % pentatonicScale.length;
+      const note = pentatonicScale[noteIndex];
+      
+      // Add slight delay between notes
+      setTimeout(() => {
+        piano.play(note, 0, { 
+          gain: 0.3,
+          duration: noteLength
+        });
+      }, index * 300); // 300ms between notes
+    });
+
+    // Mark this melody as played
+    setPlayedMelodies(prev => new Set([...prev, commitSha]));
+  };
+
+  // Modify the renderCommitGroup function to play melody when sessions are shown
   const renderCommitGroup = (projectName, commitGroup) => {
     const { commit, sessions, isUncommitted } = commitGroup;
     const totalDuration = getTotalDuration(sessions);
@@ -995,7 +1030,13 @@ const HackTimeComponent = ({ isExiting, onClose, userData }) => {
           </div>
           <div>
             <button
-              onClick={() => toggleDayDropdown(projectName, commitSha)}
+              onClick={() => {
+                toggleDayDropdown(projectName, commitSha);
+                // Play melody when expanding
+                if (!openedDays[projectName]?.includes(commitSha)) {
+                  playSessionMelody(sessions, commitSha);
+                }
+              }}
               style={{
                 padding: '2px 6px',
                 border: '1px solid #ccc',
