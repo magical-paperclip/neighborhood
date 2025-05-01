@@ -24,6 +24,7 @@ export default function Home() {
   const [showNeighborhoodPopup, setShowNeighborhoodPopup] = useState(false);
   const [isProfileExpanded, setIsProfileExpanded] = useState(false);
   const [isLoadingProfile, setIsLoadingProfile] = useState(true);
+  const [isLoading, setIsLoading] = useState(true);
 
   const banjoSound = useRef(null);
 
