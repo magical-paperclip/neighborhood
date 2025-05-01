@@ -500,7 +500,7 @@ export default function Home() {
               <iframe
                 width="100%"
                 height="100%"
-                src="https://www.youtube.com/embed/P5eVmjHb6IQ?autoplay=1"
+                src="https://www.youtube.com/embed/On9yuhuU40E?autoplay=1"
                 title="Neighborhood Song"
                 frameBorder="0"
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
@@ -536,7 +536,7 @@ export default function Home() {
             <iframe
               width="100%"
               height="100%"
-              src="https://www.youtube.com/embed/4TbTySC-SBY?autoplay=1"
+              src="https://www.youtube.com/embed/ehH_52fzStw?autoplay=1"
               title="Neighborhood Song"
               frameBorder="0"
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
