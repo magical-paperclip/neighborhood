@@ -7,6 +7,7 @@ export default function Document() {
       <body>
         <Main />
         <NextScript />
+        <script defer data-domain="neighborhood.hackclub.com" src="https://plausible.io/js/script.js"></script>
       </body>
     </Html>
   );
