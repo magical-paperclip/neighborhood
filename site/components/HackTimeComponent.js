@@ -168,12 +168,6 @@ const HackTimeComponent = ({ isExiting, onClose, userData }) => {
             
             // Store commits in our new object
             newCommitData[project.name] = commits;
-
-            // If project is checked, update commits in Airtable
-            if (checked.includes(project.name)) {
-              await updateCommitsInAirtable(project.name, commits);
-            }
-            
           } catch (error) {
             console.error(`Error fetching commits for ${project.name}:`, error);
             setCommitFetchErrors(prev => ({
@@ -191,10 +185,7 @@ const HackTimeComponent = ({ isExiting, onClose, userData }) => {
 
       // Update commit data state once with all commits
       console.log('Setting all commit data:', newCommitData);
-      setCommitData(prev => ({
-        ...prev,
-        ...newCommitData
-      }));
+      setCommitData(newCommitData);
 
       // Fetch sessions for all projects
       const startDate = new Date(2025, 0, 1);
@@ -220,29 +211,14 @@ const HackTimeComponent = ({ isExiting, onClose, userData }) => {
       for (const result of projectSessionsResults) {
         newProjectSessions[result.projectName] = result.sessions;
         
-        // If project is checked and has commits, update sessions in Airtable
-        if (checked.includes(result.projectName) && newCommitData[result.projectName]) {
-          // Group sessions by commit first
-          const grouped = groupSessionsByCommit(result.sessions, result.projectName);
-          
-          // Create session-commit matches based on the grouping
-          const matches = {};
-          Object.entries(grouped).forEach(([commitSha, group]) => {
-            if (commitSha !== 'uncommitted' && commitSha !== 'unmatched') {
-              group.sessions.forEach(session => {
-                matches[session.start_time] = group.commit;
-              });
-            }
-          });
-          
-          // Update sessionCommitMatches state
-          setSessionCommitMatches(prev => ({
-            ...prev,
-            [result.projectName]: matches
-          }));
-          
-          // Update sessions in Airtable with the commit matches
-          await updateSessionsInAirtable(result.projectName, result.sessions);
+        // If project has commits, match sessions with commits immediately
+        if (newCommitData[result.projectName] && result.sessions.length > 0) {
+          console.log(`Matching sessions for ${result.projectName} on initial load`);
+          matchSessionsToCommits(
+            result.sessions,
+            newCommitData[result.projectName],
+            result.projectName
+          );
         }
       }
       
@@ -534,38 +510,56 @@ const HackTimeComponent = ({ isExiting, onClose, userData }) => {
   };
 
   const matchSessionsToCommits = (sessions, commits, projectName) => {
-    console.log('Starting matching for project:', projectName);
-    console.log('Sessions:', sessions.length);
-    console.log('Commits:', commits.length);
+    console.log('\n=== Starting Session-Commit Matching ===');
+    console.log(`Project: ${projectName}`);
+    console.log(`Sessions: ${sessions.length}`);
+    console.log(`Commits: ${commits.length}`);
 
     // Sort commits by date ascending
     const sortedCommits = [...commits].sort((a, b) => a.date - b.date);
 
     // Log first and last commit dates
     if (sortedCommits.length > 0) {
-      console.log('First commit:', {
-        date: new Date(sortedCommits[0].date).toISOString(),
-        message: sortedCommits[0].message
-      });
-      console.log('Last commit:', {
-        date: new Date(sortedCommits[sortedCommits.length - 1].date).toISOString(),
-        message: sortedCommits[sortedCommits.length - 1].message
-      });
+      console.log('\nCommit Range:');
+      console.log('First commit:', new Date(sortedCommits[0].date).toISOString());
+      console.log('Last commit:', new Date(sortedCommits[sortedCommits.length - 1].date).toISOString());
     }
+
+    // Log first few sessions
+    console.log('\nFirst few sessions:');
+    sessions.slice(0, 3).forEach(session => {
+      const startTime = new Date(session.start_time * 1000).toISOString();
+      const endTime = new Date((session.start_time + session.duration) * 1000).toISOString();
+      console.log(`Session: Start=${startTime}, End=${endTime}, Duration=${session.duration}s`);
+    });
 
     // For each session, find the earliest commit after the session ends
     const matches = {};
-    sessions.forEach(session => {
-      const sessionEnd = new Date(session.start_time * 1000 + session.duration * 1000).getTime();
+    let matchCount = 0;
+    let unmatchedCount = 0;
+
+    sessions.forEach((session, index) => {
+      // Convert session time to milliseconds and add duration
+      const sessionEnd = (session.start_time + session.duration) * 1000;
       
-      // Find the first commit after sessionEnd using binary search for performance
+      // Find the first commit after sessionEnd using binary search
       let left = 0;
       let right = sortedCommits.length - 1;
       let matchingCommit = null;
 
+      // Log every 100th session for progress tracking
+      if (index % 100 === 0) {
+        console.log(`\nProcessing session ${index + 1}/${sessions.length}`);
+        console.log(`Session end time: ${new Date(sessionEnd).toISOString()}`);
+      }
+
       while (left <= right) {
         const mid = Math.floor((left + right) / 2);
         const commit = sortedCommits[mid];
+        
+        if (index % 100 === 0) {
+          console.log(`Comparing with commit at ${new Date(commit.date).toISOString()}`);
+        }
         
         if (commit.date >= sessionEnd) {
           matchingCommit = commit;
@@ -577,18 +571,24 @@ const HackTimeComponent = ({ isExiting, onClose, userData }) => {
 
       if (matchingCommit) {
         matches[session.start_time] = matchingCommit;
-        console.log('Matched session:', {
-          sessionEnd: new Date(sessionEnd).toISOString(),
-          commitDate: new Date(matchingCommit.date).toISOString(),
-          commitMessage: matchingCommit.message
-        });
+        matchCount++;
+        
+        if (index % 100 === 0) {
+          console.log(`Match found! Commit: ${matchingCommit.message}`);
+          console.log(`Commit time: ${new Date(matchingCommit.date).toISOString()}`);
+        }
       } else {
-        matches[session.start_time] = null;
-        console.log('No matching commit for session ending at:', new Date(sessionEnd).toISOString());
+        unmatchedCount++;
+        if (index % 100 === 0) {
+          console.log('No matching commit found');
+        }
       }
     });
 
-    console.log('Total matches found:', Object.keys(matches).filter(k => matches[k] !== null).length);
+    console.log('\n=== Matching Summary ===');
+    console.log(`Total sessions: ${sessions.length}`);
+    console.log(`Matched sessions: ${matchCount}`);
+    console.log(`Unmatched sessions: ${unmatchedCount}`);
     
     setSessionCommitMatches(prev => ({
       ...prev,
