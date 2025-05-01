@@ -186,7 +186,7 @@ const BulletinComponent = ({ isExiting, onClose }) => {
 
           {/* Box 2 */}
           <div 
-            onClick={() => window.open('https://hackclub.slack.com/archives/C073L9LB4K1', '_blank')}
+            // onClick={() => window.open('https://hackclub.slack.com/archives/C073L9LB4K1', '_blank')}
             style={{
               width: "100%",
               height: "150px",
@@ -208,12 +208,12 @@ const BulletinComponent = ({ isExiting, onClose }) => {
               border: "5px solid rgba(169, 164, 249, 0.56)",
             }}>
               <p style={{
-                fontSize: "35px", 
+                fontSize: "16px", 
                 color: "#503da099", 
                 fontFamily: "var(--font-m-plus-rounded)",
                 margin: 0, 
               }}>
-                Meet your neighbors!
+                Meet your neighbors! in #neighborhood (on Slack)
               </p>
             </div>
           </div>

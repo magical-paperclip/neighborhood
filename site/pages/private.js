@@ -499,7 +499,16 @@ export default function Home() {
               {/* <p style={{transform: "rotate(0.5deg)"}}>
                 We're renting a bunch of houses (as many as we need) in San Francisco for high school hackers to come and build apps together. So long as you code 40 hours per week on your own projects while you're living in SF, you're welcome to stay as long as you'd like!
               </p> */}
-              <video style={{width: "100%", backgroundColor: "#000", maxWidth: "520px", aspectRatio: "16/9"}}></video>
+              <iframe
+                width="100%"
+                height="100%"
+                src="https://www.youtube.com/embed/P5eVmjHb6IQ?autoplay=1"
+                title="Neighborhood Song"
+                frameBorder="0"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+                style={{width: "100%", backgroundColor: "#000", maxWidth: "520px", aspectRatio: "16/9"}}
+              />
               {/* <p style={{transform: "rotate(-0.3deg)"}}>
                 I have an idea for an app that I have wanted to ship for the past 6 years, and maybe you're in a similar boat (if not, that's okay too). The first step (after signing up) is to share what app you'd like to create this month.
               </p> */}

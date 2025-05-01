@@ -394,9 +394,18 @@ const HackTimeComponent = ({ isExiting, onClose, userData }) => {
 
     const isCurrentlyChecked = checkedProjects.includes(projectName);
 
+    // Optimistically update UI
+    if (!isCurrentlyChecked) {
+      setCheckedProjects((prev) => [...prev, projectName]);
+      playProjectCheckSound();
+    } else {
+      setCheckedProjects((prev) => prev.filter((name) => name !== projectName));
+      playProjectUncheckSound();
+    }
+
     try {
       if (!isCurrentlyChecked) {
-        // Add project
+        // Add project (background)
         const response = await fetch("/api/addProject", {
           method: "POST",
           headers: {
@@ -413,9 +422,6 @@ const HackTimeComponent = ({ isExiting, onClose, userData }) => {
           throw new Error("Failed to add project");
         }
 
-        // Update local state immediately
-        setCheckedProjects((prev) => [...prev, projectName]);
-
         // If project has commits, update them in Airtable
         if (commitData[projectName]) {
           await updateCommitsInAirtable(projectName, commitData[projectName]);
@@ -429,7 +435,7 @@ const HackTimeComponent = ({ isExiting, onClose, userData }) => {
           );
         }
       } else {
-        // Remove project
+        // Remove project (background)
         const response = await fetch("/api/removeProject", {
           method: "POST",
           headers: {
@@ -444,14 +450,20 @@ const HackTimeComponent = ({ isExiting, onClose, userData }) => {
         if (!response.ok) {
           throw new Error("Failed to remove project");
         }
-
-        // Update local state immediately
-        setCheckedProjects((prev) =>
-          prev.filter((name) => name !== projectName),
-        );
       }
     } catch (error) {
+      // Revert UI change on error
+      setCheckedProjects((prev) => {
+        if (!isCurrentlyChecked) {
+          // Tried to check, so remove
+          return prev.filter((name) => name !== projectName);
+        } else {
+          // Tried to uncheck, so add back
+          return [...prev, projectName];
+        }
+      });
       console.error("Error updating project:", error);
+      // Optionally show a toast or alert here
       // Refresh data to ensure correct state
       fetchHackatimeData();
     }
@@ -1045,8 +1057,7 @@ const HackTimeComponent = ({ isExiting, onClose, userData }) => {
 
   // Checkbox checked logic
   const isProjectChecked = (projectName) => {
-    const project = projects.find((p) => p.name === projectName);
-    return project?.isChecked || false;
+    return checkedProjects.includes(projectName);
   };
 
   const isCommitChecked = (projectName, commitGroup) => {
@@ -1746,133 +1757,137 @@ const HackTimeComponent = ({ isExiting, onClose, userData }) => {
                   neighborhood.
                 </p>
 
-                {projects.map((project) => {
-                  const projectChecked = isProjectChecked(project.name);
-                  const hasCommits = commitData[project.name]?.length > 0;
-                  const grouped = groupSessionsByCommit(
-                    projectSessions[project.name] || [],
-                    project.name,
-                  );
-                  const projectTotal = getTotalDuration(
-                    projectSessions[project.name] || [],
-                  );
+                {projects
+                  .filter((project) =>
+                    getTotalDuration(projectSessions[project.name] || []) > 0
+                  )
+                  .map((project) => {
+                    const projectChecked = isProjectChecked(project.name);
+                    const hasCommits = commitData[project.name]?.length > 0;
+                    const grouped = groupSessionsByCommit(
+                      projectSessions[project.name] || [],
+                      project.name,
+                    );
+                    const projectTotal = getTotalDuration(
+                      projectSessions[project.name] || [],
+                    );
 
-                  return (
-                    <div key={project.name}>
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          marginBottom: "8px",
-                          width: "100%",
-                          position: "relative",
-                        }}
-                      >
-                        <div style={{ marginRight: "12px" }}>
-                          <input
-                            type="checkbox"
-                            checked={projectChecked}
-                            onChange={() => handleProjectSelect(project.name)}
-                          />
-                        </div>
-                        <div style={{ flex: 1 }}>
-                          <p
-                            style={{
-                              margin: 0,
-                              display: "flex",
-                              alignItems: "center",
-                              gap: "8px",
-                            }}
-                          >
-                            <span>{project.name}</span>
-                            {projectTotal > 0 ? (
-                              <span style={{ color: "#666" }}>
-                                ({formatDuration(projectTotal)})
-                              </span>
-                            ) : null}
-                            {githubLinks[project.name] ? (
-                              <span
-                                style={{
-                                  fontSize: "12px",
-                                  color: "#666",
-                                  opacity: 0.8,
-                                }}
-                              >
-                                (
-                                {githubLinks[project.name].replace(
-                                  /https?:\/\/github\.com\//,
-                                  "",
-                                )}
-                                )
-                              </span>
-                            ) : projectChecked ? (
-                              <span
-                                onClick={() => handleGithubLink(project.name)}
-                                style={{
-                                  color: "#ef758a",
-                                  background: "#ffeef0",
-                                  padding: "2px 8px",
-                                  borderRadius: "4px",
-                                  cursor: "pointer",
-                                  fontSize: "12px",
-                                  fontWeight: "500",
-                                  display: "flex",
-                                  alignItems: "center",
-                                  gap: "4px",
-                                  border: "1px solid #ffd1d6",
-                                }}
-                              >
-                                <span style={{ fontSize: "14px" }}>⚠️</span>
-                                Connect GitHub Required
-                              </span>
-                            ) : null}
-                          </p>
-                          {projectChecked && !githubLinks[project.name] && (
+                    return (
+                      <div key={project.name}>
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            marginBottom: "8px",
+                            width: "100%",
+                            position: "relative",
+                          }}
+                        >
+                          <div style={{ marginRight: "12px" }}>
+                            <input
+                              type="checkbox"
+                              checked={projectChecked}
+                              onChange={() => handleProjectSelect(project.name)}
+                            />
+                          </div>
+                          <div style={{ flex: 1 }}>
                             <p
                               style={{
-                                margin: "4px 0 0 0",
-                                fontSize: "12px",
-                                color: "#666",
-                                fontStyle: "italic",
+                                margin: 0,
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "8px",
                               }}
                             >
-                              Connect GitHub to track time against commits
+                              <span>{project.name}</span>
+                              {projectTotal > 0 ? (
+                                <span style={{ color: "#666" }}>
+                                  ({formatDuration(projectTotal)})
+                                </span>
+                              ) : null}
+                              {githubLinks[project.name] ? (
+                                <span
+                                  style={{
+                                    fontSize: "12px",
+                                    color: "#666",
+                                    opacity: 0.8,
+                                  }}
+                                >
+                                  (
+                                  {githubLinks[project.name].replace(
+                                    /https?:\/\/github\.com\//,
+                                    "",
+                                  )}
+                                  )
+                                </span>
+                              ) : projectChecked ? (
+                                <span
+                                  onClick={() => handleGithubLink(project.name)}
+                                  style={{
+                                    color: "#ef758a",
+                                    background: "#ffeef0",
+                                    padding: "2px 8px",
+                                    borderRadius: "4px",
+                                    cursor: "pointer",
+                                    fontSize: "12px",
+                                    fontWeight: "500",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: "4px",
+                                    border: "1px solid #ffd1d6",
+                                  }}
+                                >
+                                  <span style={{ fontSize: "14px" }}>⚠️</span>
+                                  Connect GitHub Required
+                                </span>
+                              ) : null}
                             </p>
+                            {projectChecked && !githubLinks[project.name] && (
+                              <p
+                                style={{
+                                  margin: "4px 0 0 0",
+                                  fontSize: "12px",
+                                  color: "#666",
+                                  fontStyle: "italic",
+                                }}
+                              >
+                                Connect GitHub to track time against commits
+                              </p>
+                            )}
+                          </div>
+                          {hasCommits && (
+                            <div>
+                              <button
+                                onClick={() => toggleProject(project.name)}
+                                style={{
+                                  padding: "4px 8px",
+                                  border: "1px solid #ccc",
+                                  borderRadius: "4px",
+                                  backgroundColor: "white",
+                                  cursor: "pointer",
+                                  transform: openedProjects.includes(project.name)
+                                    ? "rotate(180deg)"
+                                    : "none",
+                                }}
+                              >
+                                ▼
+                              </button>
+                            </div>
                           )}
                         </div>
-                        {hasCommits && (
-                          <div>
-                            <button
-                              onClick={() => toggleProject(project.name)}
-                              style={{
-                                padding: "4px 8px",
-                                border: "1px solid #ccc",
-                                borderRadius: "4px",
-                                backgroundColor: "white",
-                                cursor: "pointer",
-                                transform: openedProjects.includes(project.name)
-                                  ? "rotate(180deg)"
-                                  : "none",
-                              }}
-                            >
-                              ▼
-                            </button>
+                        {openedProjects.includes(project.name) && hasCommits && (
+                          <div
+                            style={{ paddingLeft: "24px", marginBottom: "8px" }}
+                          >
+                            {Object.entries(grouped).map(
+                              ([commitSha, commitGroup]) =>
+                                renderCommitGroup(project.name, commitGroup),
+                            )}
                           </div>
                         )}
                       </div>
-                      {openedProjects.includes(project.name) && hasCommits && (
-                        <div
-                          style={{ paddingLeft: "24px", marginBottom: "8px" }}
-                        >
-                          {Object.entries(grouped).map(
-                            ([commitSha, commitGroup]) =>
-                              renderCommitGroup(project.name, commitGroup),
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
+                    );
+                  })}
               </>
             ) : (
               <div
