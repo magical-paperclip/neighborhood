@@ -22,7 +22,8 @@ export default function Home() {
   const [userData, setUserData] = useState();
   const [token, setToken] = useState("");
   const [showNeighborhoodPopup, setShowNeighborhoodPopup] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isProfileExpanded, setIsProfileExpanded] = useState(false);
+  const [isLoadingProfile, setIsLoadingProfile] = useState(true);
 
   const banjoSound = useRef(null);
 
@@ -33,15 +34,12 @@ export default function Home() {
 
     // If user is signed in, update their Slack data
     if (token) {
-      setIsLoading(true);
       updateSlackUserData(token)
         .then(data => {
           setUserData(data);
-          setIsLoading(false);
         })
         .catch(error => {
           console.error('Failed to update user data:', error);
-          setIsLoading(false);
         });
     } else {
       setIsLoading(false);
@@ -49,7 +47,7 @@ export default function Home() {
 
     // Initialize audio
     banjoSound.current = new Audio('/banjo.mp3');
-  }, [hasEnteredNeighborhood]);
+  }, []);
 
   const playBanjoSound = () => {
     if (banjoSound.current) {
@@ -126,6 +124,126 @@ export default function Home() {
         />
       }
 
+      <div>
+        {(isLoadingProfile ? (
+          <div 
+            style={{
+              position: 'absolute',
+              right: '32px',
+              top: '32px',
+              transition: 'all 0.3s ease',
+            }}
+          >
+            <div 
+              style={{
+                width: '48px',
+                height: '48px',
+                borderRadius: '24px',
+                backgroundColor: '#007C74',
+                opacity: 0.7,
+                animation: 'pulse 1.5s ease-in-out infinite'
+              }}
+            />
+          </div>
+        ) : userData && (
+          <div 
+            style={{
+              position: 'absolute',
+              right: '32px',
+              top: '32px',
+              transition: 'all 0.3s ease',
+              transform: isProfileExpanded ? 'scale(1.1)' : 'scale(1)',
+              cursor: 'pointer',
+              zIndex: 1000
+            }}
+            onMouseEnter={() => setIsProfileExpanded(true)}
+            onMouseLeave={() => setIsProfileExpanded(false)}
+          >
+            <div 
+              style={{
+                width: isProfileExpanded ? '200px' : '48px',
+                height: isProfileExpanded ? '120px' : '48px',
+                borderRadius: isProfileExpanded ? '12px' : '24px',
+                overflow: 'hidden',
+                backgroundColor: '#007C74',
+                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                display: 'flex',
+                flexDirection: 'column',
+                padding: isProfileExpanded ? '12px' : '0',
+                gap: '12px'
+              }}
+            >
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                width: '200px',
+              }}>
+                <img 
+                  src={userData.profilePicture || '/default-avatar.png'} 
+                  style={{
+                    width: '48px',
+                    height: '48px',
+                    borderRadius: '24px',
+                    border: '2px solid #FFF9E6',
+                    objectFit: 'cover',
+                    backgroundColor: '#005852',
+                    flexShrink: 0
+                  }}
+                  alt={userData.name || 'Profile'}
+                  onError={(e) => {
+                    e.target.onerror = null;
+                    e.target.src = '/default-avatar.png';
+                  }}
+                />
+                <div style={{
+                  color: '#FFF9E6',
+                  fontFamily: 'M PLUS Rounded 1c',
+                  fontWeight: 'bold',
+                  fontSize: '16px',
+                  opacity: isProfileExpanded ? 1 : 0,
+                  transform: isProfileExpanded ? 'translateX(0)' : 'translateX(-10px)',
+                  transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis'
+                }}>
+                  {userData.name || 'User'}
+                </div>
+              </div>
+              {isProfileExpanded && (
+                <div 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleLogout();
+                  }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    color: '#FFF9E6',
+                    fontFamily: 'M PLUS Rounded 1c',
+                    fontSize: '14px',
+                    padding: '8px',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease',
+                    opacity: isProfileExpanded ? 1 : 0,
+                    transform: isProfileExpanded ? 'translateY(0)' : 'translateY(-10px)',
+                  }}
+                >
+                  <img
+                    style={{width: 20, height: 20}}
+                    src="logout.svg"
+                  />
+                  Logout
+                </div>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+
       <NeighborhoodEnvironment 
         hasEnteredNeighborhood={hasEnteredNeighborhood} 
         setHasEnteredNeighborhood={setHasEnteredNeighborhood}
@@ -133,19 +251,14 @@ export default function Home() {
       <div>
         <div style={{height: "100vh", width: "100%", gap: 32, justifyContent: "space-between", paddingTop: 16, paddingBottom: 16, display: "flex", flexDirection: "column", paddingLeft: 32}}>
 
-        <div style={{position: "absolute", right: 16, top: 16}}>
-          {!hasEnteredNeighborhood &&
-          <img
-            style={{width: 32, height: 32, cursor: "pointer"}}
-            src="logout.svg"
-            onClick={handleLogout}
-          />}
-        </div>
-
         <div style={{position: "absolute", right: 16, bottom: 16}}>
           {!hasEnteredNeighborhood &&
           <button 
-          onClick={() => setShowNeighborhoodPopup(true)}
+          onClick={() => {
+            // setShowNeighborhoodPopup(true)
+            setHasEnteredNeighborhood(true)
+          }
+          }
             style={{
               padding: "8px 16px",
               opacity: 0.3,
@@ -218,6 +331,12 @@ export default function Home() {
           0% { visibility: visible; }
           50% { visibility: hidden; }
           100% { visibility: visible; }
+        }
+
+        @keyframes pulse {
+          0% { opacity: 0.7; transform: scale(1); }
+          50% { opacity: 0.4; transform: scale(0.95); }
+          100% { opacity: 0.7; transform: scale(1); }
         }
 
         @keyframes popIn {
