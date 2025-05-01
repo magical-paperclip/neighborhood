@@ -71,7 +71,7 @@ const DownloadPage = () => {
               color: '#fff',
               fontStyle: 'italic',
               fontFamily: 'inherit'
-            }}>Choose your platform to get started!</p>
+            }}>adventure awaits...</p>
           </div>
           
           <div style={{
