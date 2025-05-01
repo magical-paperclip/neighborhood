@@ -365,7 +365,7 @@ export default function Home() {
                   animation: "fadeInScale 0.5s ease-out forwards",
                   marginBottom: "16px"
                 }}>
-                  <div>Welcome to the Neighborhood! check your inbox for first steps {"<3"}</div>
+                  <div>Welcome to the Neighborhood! Head over to the{" "}<a href="https://hackclub.slack.com/archives/C073L9LB4K1">#neighborhood</a>{" "}and meet your future roommates!</div>
                   {!navigator.userAgent.toLowerCase().includes('mobile') ? (
                     <div style={{
                       marginTop: "16px",
