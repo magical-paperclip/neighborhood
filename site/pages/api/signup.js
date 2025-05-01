@@ -27,11 +27,14 @@ export default async function handler(req, res) {
     return res.status(400).json({ message: 'Email is required' });
   }
 
+  // Normalize email by stripping whitespace and converting to lowercase
+  const normalizedEmail = email.trim().toLowerCase();
+
   try {
     // Check if user already exists
     const records = await base(process.env.AIRTABLE_TABLE_ID)
       .select({
-        filterByFormula: `{email} = '${email}'`,
+        filterByFormula: `{email} = '${normalizedEmail}'`,
         maxRecords: 1
       })
       .firstPage();
@@ -43,7 +46,7 @@ export default async function handler(req, res) {
     await base('OTP').create([
       {
         fields: {
-          Email: email,
+          Email: normalizedEmail,
           OTP: otp,
           isUsed: false
         }
@@ -63,7 +66,7 @@ export default async function handler(req, res) {
     const newRecord = await base(process.env.AIRTABLE_TABLE_ID).create([
       {
         fields: {
-          email: email,
+          email: normalizedEmail,
           token: token
         }
       }

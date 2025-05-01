@@ -26,6 +26,7 @@ export default async function handler(req, res) {
     }
 
     const userEmail = userRecords[0].fields.email;
+    const userRecordId = userRecords[0].id;
 
     // Get all projects attributed to this user
     const attributedProjects = await base("hackatimeProjects")
@@ -91,6 +92,16 @@ export default async function handler(req, res) {
 
     // Combine both sources of projects
     const allProjects = [...projectsWithStatus, ...airtableOnlyProjects];
+
+    // If user has projects, update their hasHackatimeAt timestamp if not already set
+    if (allProjects.length > 0) {
+      const currentUser = userRecords[0].fields;
+      if (!currentUser.hasHackatimeAt) {
+        await base(process.env.AIRTABLE_TABLE_ID).update(userRecordId, {
+          hasHackatimeAt: new Date().toISOString(),
+        });
+      }
+    }
 
     res.status(200).json({
       ...hackatimeData,

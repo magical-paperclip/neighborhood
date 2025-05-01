@@ -113,7 +113,7 @@ export default function SignupComponent({ setHasSignedIn }) {
       }
 
       try {
-        const response = await fetch('https://neighborhood.hackclub.dev/api/signup', {
+        const response = await fetch('https://neighborhood.hackclub.com/api/signup', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -195,7 +195,7 @@ export default function SignupComponent({ setHasSignedIn }) {
     const formattedEmail = email.toLowerCase().trim();
 
     try {
-      const response = await fetch('https://neighborhood.hackclub.dev/api/verifyOTP', {
+      const response = await fetch('https://neighborhood.hackclub.com/api/verifyOTP', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -335,7 +335,7 @@ export default function SignupComponent({ setHasSignedIn }) {
                   />
                 </div>
                 
-                <p style={{color: "#FFF9E6", fontWeight: 700, marginTop: '16px'}}><i>pssst... enter to continue</i></p>
+                <p style={{color: "#FFF9E6", fontWeight: 700, marginTop: '16px'}}><i>pssst... same email as earlier pls</i></p>
               </div>
             )}
             {stage === 1 && (

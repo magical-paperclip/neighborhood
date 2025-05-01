@@ -104,11 +104,52 @@ echo "💿 Creating a clean DMG with just the app..."
 # Create a temporary directory for DMG contents
 mkdir -p "$TMP_DMG_DIR"
 
-# Copy just the app to the temporary directory
+# Copy the app to the temporary directory
 cp -R "$APP_PATH" "$TMP_DMG_DIR/"
 
-# Create the DMG
+# Create a symbolic link to Applications
+ln -s /Applications "$TMP_DMG_DIR/Applications"
+
+# Set up DMG background and layout
+mkdir -p "$TMP_DMG_DIR/.background"
+# Create a simple background image (white)
+convert -size 600x400 xc:white "$TMP_DMG_DIR/.background/background.png"
+
+# Create the DMG with custom layout
 hdiutil create -volname "$APP_NAME" -srcfolder "$TMP_DMG_DIR" -ov -format UDZO "$FINAL_DMG_PATH"
+
+# Mount the DMG to set custom layout
+DMG_DEVICE=$(hdiutil attach -readwrite -noverify "$FINAL_DMG_PATH" | egrep '^/dev/' | sed 1q | awk '{print $1}')
+sleep 2
+
+# Set the background image and icon positions
+echo '
+   tell application "Finder"
+     tell disk "'"${APP_NAME}"'"
+           open
+           set current view of container window to icon view
+           set toolbar visible of container window to false
+           set statusbar visible of container window to false
+           set the bounds of container window to {400, 100, 1000, 500}
+           set viewOptions to the icon view options of container window
+           set arrangement of viewOptions to not arranged
+           set icon size of viewOptions to 72
+           set background picture of viewOptions to file ".background:background.png"
+           set position of item "'"${APP_NAME}.app"'" of container window to {100, 100}
+           set position of item "Applications" of container window to {300, 100}
+           close
+           open
+           update without registering applications
+           delay 2
+     end tell
+   end tell
+' | osascript
+
+# Make sure everything is written to disk
+sync
+
+# Unmount the DMG
+hdiutil detach "$DMG_DEVICE"
 
 # Clean up temporary directory
 rm -rf "$TMP_DMG_DIR"
