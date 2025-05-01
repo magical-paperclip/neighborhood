@@ -203,12 +203,9 @@ export default function Home() {
                     display: "flex",
                     flexDirection: "column",
                     gap: 16,
-                    backgroundColor: "#007C74",
                     paddingLeft: 32,
                     paddingTop: 32,
                     paddingRight: 32,
-                    height: "100%",
-                    width: "fit-content",
                   }}
                 >
                   <img
