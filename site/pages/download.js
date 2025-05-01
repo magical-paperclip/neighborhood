@@ -16,7 +16,7 @@ const DownloadPage = () => {
     {
       os: 'macOS',
       icon: '🍎',
-      url: 'https://kodan-videos.s3.us-east-2.amazonaws.com/Neighborhood.dmg',
+      url: 'https://kodan-videos.s3.us-east-2.amazonaws.com/Neighborhood+1.0.0.dmg',
       extension: '.dmg',
       description: 'Download for macOS',
       color: '#4CAF50', // Darker green

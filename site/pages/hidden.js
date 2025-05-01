@@ -34,7 +34,7 @@ export default function Home() {
     let downloadUrl = '';
 
     if (userAgent.includes('mac')) {
-      downloadUrl = 'https://kodan-videos.s3.us-east-2.amazonaws.com/Neighborhood.dmg';
+      downloadUrl = 'https://kodan-videos.s3.us-east-2.amazonaws.com/Neighborhood+1.0.0.dmg';
     } else if (userAgent.includes('win')) {
       downloadUrl = 'https://kodan-videos.s3.us-east-2.amazonaws.com/Neighborhood-win32-x64.zip';
     } else if (userAgent.includes('linux')) {
