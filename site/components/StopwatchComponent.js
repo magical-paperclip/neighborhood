@@ -150,13 +150,13 @@ const StopwatchComponent = ({ onClose, onAddProject, isExiting, userData }) => {
 
         const data = await response.json();
 
-        // Extract just the project names
+        // Extract just the App Names
         const projectNames = data.data.projects.map((project) => ({
           id: project.name, // Using name as ID since that's what we need
           name: project.name,
         }));
 
-        console.log("Project names:", projectNames);
+        console.log("App Names:", projectNames);
         setProjects(projectNames);
         if (projectNames.length > 0 && !projectName) {
           setProjectName(projectNames[0].name);

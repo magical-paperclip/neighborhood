@@ -13,7 +13,7 @@ export default async function handler(req, res) {
   const { token, projectName, githubLink } = req.body;
 
   if (!token || !projectName) {
-    return res.status(400).json({ message: 'Token and project name are required' });
+    return res.status(400).json({ message: 'Token and App Name are required' });
   }
 
   try {

@@ -14,9 +14,9 @@ const AddProjectComponent = ({
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    // Validate project name
+    // Validate App Name
     if (!projectName.trim()) {
-      alert("Please enter a project name");
+      alert("Please enter a App Name");
       return;
     }
 
@@ -94,13 +94,13 @@ const AddProjectComponent = ({
                 color: "#333",
               }}
             >
-              Project Name
+              App Name
             </label>
             <input
               type="text"
               value={projectName}
               onChange={(e) => setProjectName(e.target.value)}
-              placeholder="Enter project name"
+              placeholder="Enter App Name"
               style={{
                 width: "100%",
                 padding: "10px 12px",

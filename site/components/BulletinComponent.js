@@ -10,11 +10,12 @@ const BulletinComponent = ({ isExiting, onClose }) => {
         zIndex: 2, 
         width: "calc(100% - 16px)", 
         height: "calc(100% - 16px)", 
-        borderRadius: 8, 
+        borderRadius: 25, 
         marginLeft: 8, 
         marginTop: 8, 
         backgroundColor: "#ffffff",
-        overflow: "hidden"
+        overflow: "hidden",
+        boxShadow: '0 8px 32px rgba(123, 91, 63, 0.1)'
       }}
     >
       {/* Top bar (solid color) */}
@@ -23,9 +24,9 @@ const BulletinComponent = ({ isExiting, onClose }) => {
         flexDirection: "row", 
         justifyContent: "space-between", 
         alignItems: "center",
-        padding: "8px 16px",
-        borderBottom: "1px solid #00000010",
-        backgroundColor: "#ffffff",
+        padding: "12px 20px",
+        borderBottom: "2px solid #B9A88F",
+        backgroundColor: "#FFFFFF",
         zIndex: 2,
         height: BOARD_BAR_HEIGHT,
         minHeight: BOARD_BAR_HEIGHT,
@@ -34,15 +35,26 @@ const BulletinComponent = ({ isExiting, onClose }) => {
         <div 
           onClick={onClose} 
           style={{
-            width: 14, 
+            width: 16, 
             cursor: "pointer", 
-            height: 14, 
-            borderRadius: 16, 
-            backgroundColor: "#FF5F56"
+            height: 16, 
+            borderRadius: '50%', 
+            backgroundColor: "#FF5F56",
+            border: '2px solid #E64940',
+            transition: 'transform 0.2s',
+            ':hover': {
+              transform: 'scale(1.1)'
+            }
           }}
         />
-        <p style={{fontSize: 18, color: "#000", margin: 0}}>Bulletin</p>
-        <div style={{width: 14, height: 14}} />
+        <p style={{
+          fontSize: 22,
+          color: "#7B5B3F",
+          margin: 0,
+          fontFamily: 'M PLUS Rounded 1c',
+          fontWeight: 'bold'
+        }}>Bulletin</p>
+        <div style={{width: 16, height: 16}} />
       </div>
 
       {/* Content area */}

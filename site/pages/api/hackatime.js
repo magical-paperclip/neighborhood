@@ -35,7 +35,7 @@ export default async function handler(req, res) {
       })
       .all();
 
-    // Create a Set of attributed project names for faster lookup
+    // Create a Set of attributed App Names for faster lookup
     const attributedProjectNames = new Set(
       attributedProjects.map((record) => record.fields.name),
     );

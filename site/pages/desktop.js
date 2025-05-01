@@ -9,6 +9,7 @@ import JournalComponent from "@/components/JournalComponent";
 import BulletinComponent from "@/components/BulletinComponent";
 import HackTimeComponent from "@/components/HackTimeComponent";
 import NeighborhoodPopup from "@/components/NeighborhoodPopup";
+import ChallengesComponent from "@/components/ChallengesComponent";
 import { useState, useEffect, useRef } from "react";
 import { getToken, removeToken } from "@/utils/storage";
 import { updateSlackUserData } from "@/utils/slack";
@@ -114,6 +115,12 @@ export default function Home() {
       }
       {(UIPage == "bulletin" || (isExiting && UIPage === "bulletin")) && 
         <BulletinComponent 
+          isExiting={isExiting}
+          onClose={handleCloseComponent}
+        />
+      }
+      {(UIPage == "challenges" || (isExiting && UIPage === "challenges")) && 
+        <ChallengesComponent 
           isExiting={isExiting}
           onClose={handleCloseComponent}
         />

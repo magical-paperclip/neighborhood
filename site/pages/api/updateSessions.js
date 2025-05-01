@@ -16,7 +16,7 @@ export default async function handler(req, res) {
   const { token, projectName, sessions, sessionCommitMatches } = req.body;
 
   if (!token || !projectName || !sessions) {
-    return res.status(400).json({ message: 'Token, project name, and sessions are required' });
+    return res.status(400).json({ message: 'Token, App Name, and sessions are required' });
   }
 
   // Create a unique lock key for this project

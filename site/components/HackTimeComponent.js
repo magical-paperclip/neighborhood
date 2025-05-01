@@ -4,10 +4,12 @@ import StopwatchComponent from './StopwatchComponent';
 import { getToken } from '@/utils/storage';
 import Soundfont from 'soundfont-player';
 
+const BOARD_BAR_HEIGHT = 50;
+
 const HackTimeComponent = ({ isExiting, onClose, userData }) => {
   const [timeTrackingMethod, setTimeTrackingMethod] = useState(''); // Default to stopwatch
   const [projects, setProjects] = useState([]);
-  const [checkedProjects, setCheckedProjects] = useState([]);  // Array of project names that are checked
+  const [checkedProjects, setCheckedProjects] = useState([]);  // Array of App Names that are checked
   const [openedProjects, setOpenedProjects] = useState([]);
   const [projectSessions, setProjectSessions] = useState({});
   const [selectedSessions, setSelectedSessions] = useState({});
@@ -1258,13 +1260,14 @@ const HackTimeComponent = ({ isExiting, onClose, userData }) => {
         zIndex: 2, 
         width: "calc(100% - 16px)", 
         height: "calc(100% - 16px)", 
-        borderRadius: 8, 
+        borderRadius: 25, 
         marginLeft: 8, 
         marginTop: 8, 
         backgroundColor: "#ffffff",
         overflow: "hidden",
         display: "flex",
-        flexDirection: "column"
+        flexDirection: "column",
+        boxShadow: '0 8px 32px rgba(239, 117, 138, 0.1)'
       }}
     >
       <div style={{
@@ -1272,23 +1275,37 @@ const HackTimeComponent = ({ isExiting, onClose, userData }) => {
         flexDirection: "row", 
         justifyContent: "space-between", 
         alignItems: "center",
-        padding: "8px 16px",
+        padding: "12px 20px",
         borderBottom: "2px solid #ef758a",
         backgroundColor: "#febdc3",
-        flexShrink: 0
+        flexShrink: 0,
+        height: BOARD_BAR_HEIGHT,
+        minHeight: BOARD_BAR_HEIGHT,
+        maxHeight: BOARD_BAR_HEIGHT
       }}>
         <div 
           onClick={onClose} 
           style={{
-            width: 14, 
+            width: 16, 
             cursor: "pointer", 
-            height: 14, 
-            borderRadius: 16, 
-            backgroundColor: "#FF5F56"
+            height: 16, 
+            borderRadius: '50%', 
+            backgroundColor: "#FF5F56",
+            border: '2px solid #E64940',
+            transition: 'transform 0.2s',
+            ':hover': {
+              transform: 'scale(1.1)'
+            }
           }}
         />
-        <p style={{fontSize: 18, color: "#000", margin: 0}}>Hack Time</p>
-        <div style={{width: 14, height: 14}} />
+        <p style={{
+          fontSize: 22,
+          color: "#ef758a",
+          margin: 0,
+          fontFamily: 'M PLUS Rounded 1c',
+          fontWeight: 'bold'
+        }}>Hack Time</p>
+        <div style={{width: 16, height: 16}} />
       </div>
 
       <div style={{
