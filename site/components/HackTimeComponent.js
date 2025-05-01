@@ -2028,7 +2028,7 @@ const HackTimeComponent = ({ isExiting, onClose, userData }) => {
                     padding: "8px 16px",
                     border: "1px solid #ddd",
                     borderRadius: "4px",
-                    backgroundColor: "white",
+                    backgroundColor: "pink",
                     cursor: "pointer",
                     fontSize: "14px",
                   }}
