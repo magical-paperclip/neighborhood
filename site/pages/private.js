@@ -340,6 +340,7 @@ export default function Home() {
                 <div style={{
                   position: "absolute",
                   left: "50%",
+                  zIndex: 7,
                   top: 16,
                   transform: "translateX(-50%)",
                   width: 420,
@@ -386,6 +387,7 @@ export default function Home() {
         
         <br/>
         {/* PLEASE UNIVERSE DO NOT DELETE THESE BUTTONS  */}
+        {!hasSignedUp &&
         <div style={{
                 display: "flex", 
                 marginTop: 24,
@@ -446,7 +448,7 @@ export default function Home() {
                       </div>
                       Neighborhood Song
                     </button>
-                  </div>
+                  </div>}
       </div>
       {showLetter && (
         <div style={{
