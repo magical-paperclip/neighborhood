@@ -175,7 +175,7 @@ export default function Home() {
                 display: "flex",
                 alignItems: "center",
                 gap: "8px",
-                cursor: isLoading ? "not-allowed" : "pointer",
+                cursor: isLoading ? "wait" : "pointer",
                 opacity: isLoading ? 0.5 : 1
               }}
               onMouseEnter={() => !isLoading && setSelectedItem(item.id)}

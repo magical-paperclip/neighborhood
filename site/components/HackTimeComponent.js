@@ -24,6 +24,7 @@ const HackTimeComponent = ({ isExiting, onClose, userData }) => {
   const [isLoadingCommits, setIsLoadingCommits] = useState({}); // Track loading state per project
   const [commitFetchErrors, setCommitFetchErrors] = useState({}); // Track fetch errors per project
   const [piano, setPiano] = useState(null);
+  const [noHackatimeAccount, setNoHackatimeAccount] = useState(false);
 
   // Add debounce helper at the top level of the component
   const debounce = (func, wait) => {
@@ -121,9 +122,15 @@ const HackTimeComponent = ({ isExiting, onClose, userData }) => {
 
       const response = await fetch(`/api/hackatime?userId=${userData.slackId}&token=${token}`);
       if (!response.ok) {
-        throw new Error(`API responded with status: ${response.status}`);
+        console.error(`API responded with status: ${response.status}`);
+        return;
       }
+
       const data = await response.json();
+      if (!data.data?.projects || data.data.projects.length === 0) {
+        return;
+      }
+
       console.log('Hackatime API response:', data.data.projects);
       
       setProjects(data.data.projects);
@@ -212,7 +219,7 @@ const HackTimeComponent = ({ isExiting, onClose, userData }) => {
         newProjectSessions[result.projectName] = result.sessions;
         
         // If project has commits, match sessions with commits immediately
-        if (newCommitData[result.projectName] && result.sessions.length > 0) {
+        if (newCommitData[result.projectName]) {
           console.log(`Matching sessions for ${result.projectName} on initial load`);
           matchSessionsToCommits(
             result.sessions,
@@ -1412,151 +1419,197 @@ const HackTimeComponent = ({ isExiting, onClose, userData }) => {
         }
         {timeTrackingMethod == "hackatime" && 
         <div style={{ color: "#000", padding: 16 }}>
-
-<div style={{
-            display: 'flex',
-            flexDirection: 'row',
-            gap: '24px',
-            padding: '12px',
-            alignItems: 'flex-start',
-            width: '100%',
-            justifyContent: 'space-between',
-            marginBottom: '24px',
-          }}>
-            {[
-              { name: "PENDING TIME", value: `${calculatePendingTime()} hr` },
-              { name: "SHIPPED TIME", value: "0.00 hr" },
-              { name: "APPROVED TIME", value: "0.00 hr" }
-            ].map((category, index) => (
-              <div key={index} style={{
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center',
-                flex: 1,
-                width: 150,
-                gap: '0px',
+          {projects.length === 0 ? (
+            <div style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '32px',
+            }}>
+              <img 
+                src="/tick.png"
+                alt="Hackatime icon"
+                style={{
+                  width: 86,
+                  height: 86,
+                  marginBottom: 24,
+                  objectFit: 'contain'
+                }}
+              />
+              <p style={{
+                fontSize: '20px',
+                color: '#333',
+                maxWidth: '500px',
+                lineHeight: 1.5
               }}>
-                <span style={{ 
-                  fontSize: '12px', 
-                  fontWeight: 600,
-                  letterSpacing: '-0.5px',
-                  color: '#ef758a',
-                  textAlign: 'left',
-                  textTransform: 'uppercase',
-                }}>{category.name}</span>
-                <span style={{ 
-                  fontSize: '18px', 
-                  color: '#000', 
-                  fontWeight: 600,
-                  textAlign: 'left',
-                }}>{category.value}</span>
-              </div>
-            ))}
-          </div>
-
-
-          <div style={{ height: '1px', backgroundColor: '#00000010', margin: '16px 0' }} />
-          <p style={{marginLeft: 0,}}>check the projects or sessions you'd like to be attributed to neighborhood.</p>
-
-
-          {projects.map((project) => {
-            const projectChecked = isProjectChecked(project.name);
-            const hasCommits = commitData[project.name]?.length > 0;
-            const grouped = groupSessionsByCommit(projectSessions[project.name] || [], project.name);
-            const projectTotal = getTotalDuration(projectSessions[project.name] || []);
-            
-            return (
-              <div key={project.name}>
-                <div style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  marginBottom: '8px',
-                  width: '100%',
-                  position: 'relative'
-                }}>
-                  <div style={{ marginRight: '12px' }}>
-                    <input 
-                      type="checkbox" 
-                      checked={projectChecked}
-                      onChange={() => handleProjectSelect(project.name)}
-                    />
+                Hey, there <br/><br/>
+                It appears this is your first time using Hackatime and you have no projects set up yet. Head on over to{' '}
+                <a 
+                  href="http://hackatime.hackclub.com/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    color: '#ef758a',
+                    textDecoration: 'none',
+                    fontWeight: 'bold'
+                  }}
+                >
+                  hackatime.hackclub.com
+                </a>
+                {' '}and they'll walk you through how to begin logging your time in Hackatime directly in your IDE automagically.<br/><br/> Once you log some time if you come back here you'll see your time in the interface and you can claim it.
+                <br/>
+                Make sure to signup with the same email you used for Neighborhood :)
+                <br/><br/>
+                If you get confused, pls send me an email thomas@hackclub.com and I'd be happy to help you get it working.
+              </p>
+            </div>
+          ) : (
+            <>
+              <div style={{
+                display: 'flex',
+                flexDirection: 'row',
+                gap: '24px',
+                padding: '12px',
+                alignItems: 'flex-start',
+                width: '100%',
+                justifyContent: 'space-between',
+                marginBottom: '24px',
+              }}>
+                {[
+                  { name: "PENDING TIME", value: `${calculatePendingTime()} hr` },
+                  { name: "SHIPPED TIME", value: "0.00 hr" },
+                  { name: "APPROVED TIME", value: "0.00 hr" }
+                ].map((category, index) => (
+                  <div key={index} style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flex: 1,
+                    width: 150,
+                    gap: '0px',
+                  }}>
+                    <span style={{ 
+                      fontSize: '12px', 
+                      fontWeight: 600,
+                      letterSpacing: '-0.5px',
+                      color: '#ef758a',
+                      textAlign: 'left',
+                      textTransform: 'uppercase',
+                    }}>{category.name}</span>
+                    <span style={{ 
+                      fontSize: '18px', 
+                      color: '#000', 
+                      fontWeight: 600,
+                      textAlign: 'left',
+                    }}>{category.value}</span>
                   </div>
-                  <div style={{ flex: 1 }}>
-                    <p style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <span>{project.name}</span>
-                      {projectTotal > 0 ? (
-                        <span style={{ color: '#666' }}>({formatDuration(projectTotal)})</span>
-                      ) : null}
-                      {githubLinks[project.name] ? (
-                        <span style={{ 
-                          fontSize: '12px',
-                          color: '#666',
-                          opacity: 0.8
-                        }}>
-                          ({githubLinks[project.name].replace(/https?:\/\/github\.com\//, '')})
-                        </span>
-                      ) : projectChecked ? (
-                        <span 
-                          onClick={() => handleGithubLink(project.name)}
-                          style={{ 
-                            color: '#ef758a',
-                            background: '#ffeef0',
-                            padding: '2px 8px',
-                            borderRadius: '4px',
-                            cursor: 'pointer',
+                ))}
+              </div>
+
+              <div style={{ height: '1px', backgroundColor: '#00000010', margin: '16px 0' }} />
+              <p style={{marginLeft: 0,}}>check the projects or sessions you'd like to be attributed to neighborhood.</p>
+
+              {projects.map((project) => {
+                const projectChecked = isProjectChecked(project.name);
+                const hasCommits = commitData[project.name]?.length > 0;
+                const grouped = groupSessionsByCommit(projectSessions[project.name] || [], project.name);
+                const projectTotal = getTotalDuration(projectSessions[project.name] || []);
+                
+                return (
+                  <div key={project.name}>
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      marginBottom: '8px',
+                      width: '100%',
+                      position: 'relative'
+                    }}>
+                      <div style={{ marginRight: '12px' }}>
+                        <input 
+                          type="checkbox" 
+                          checked={projectChecked}
+                          onChange={() => handleProjectSelect(project.name)}
+                        />
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <p style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <span>{project.name}</span>
+                          {projectTotal > 0 ? (
+                            <span style={{ color: '#666' }}>({formatDuration(projectTotal)})</span>
+                          ) : null}
+                          {githubLinks[project.name] ? (
+                            <span style={{ 
+                              fontSize: '12px',
+                              color: '#666',
+                              opacity: 0.8
+                            }}>
+                              ({githubLinks[project.name].replace(/https?:\/\/github\.com\//, '')})
+                            </span>
+                          ) : projectChecked ? (
+                            <span 
+                              onClick={() => handleGithubLink(project.name)}
+                              style={{ 
+                                color: '#ef758a',
+                                background: '#ffeef0',
+                                padding: '2px 8px',
+                                borderRadius: '4px',
+                                cursor: 'pointer',
+                                fontSize: '12px',
+                                fontWeight: '500',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                                border: '1px solid #ffd1d6'
+                              }}
+                            >
+                              <span style={{ fontSize: '14px' }}>⚠️</span>
+                              Connect GitHub Required
+                            </span>
+                          ) : null}
+                        </p>
+                        {projectChecked && !githubLinks[project.name] && (
+                          <p style={{
+                            margin: '4px 0 0 0',
                             fontSize: '12px',
-                            fontWeight: '500',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '4px',
-                            border: '1px solid #ffd1d6'
-                          }}
-                        >
-                          <span style={{ fontSize: '14px' }}>⚠️</span>
-                          Connect GitHub Required
-                        </span>
-                      ) : null}
-                    </p>
-                    {projectChecked && !githubLinks[project.name] && (
-                      <p style={{
-                        margin: '4px 0 0 0',
-                        fontSize: '12px',
-                        color: '#666',
-                        fontStyle: 'italic'
-                      }}>
-                        Connect GitHub to track time against commits
-                      </p>
-                    )}
-                  </div>
-                  {hasCommits && (
-                    <div>
-                      <button 
-                        onClick={() => toggleProject(project.name)}
-                        style={{
-                          padding: '4px 8px',
-                          border: '1px solid #ccc',
-                          borderRadius: '4px',
-                          backgroundColor: 'white',
-                          cursor: 'pointer',
-                          transform: openedProjects.includes(project.name) ? 'rotate(180deg)' : 'none'
-                        }}
-                      >
-                        ▼
-                      </button>
+                            color: '#666',
+                            fontStyle: 'italic'
+                          }}>
+                            Connect GitHub to track time against commits
+                          </p>
+                        )}
+                      </div>
+                      {hasCommits && (
+                        <div>
+                          <button 
+                            onClick={() => toggleProject(project.name)}
+                            style={{
+                              padding: '4px 8px',
+                              border: '1px solid #ccc',
+                              borderRadius: '4px',
+                              backgroundColor: 'white',
+                              cursor: 'pointer',
+                              transform: openedProjects.includes(project.name) ? 'rotate(180deg)' : 'none'
+                            }}
+                          >
+                            ▼
+                          </button>
+                        </div>
+                      )}
                     </div>
-                  )}
-                </div>
-                {openedProjects.includes(project.name) && hasCommits && (
-                  <div style={{ paddingLeft: '24px', marginBottom: '8px' }}>
-                    {Object.entries(grouped).map(([commitSha, commitGroup]) => 
-                      renderCommitGroup(project.name, commitGroup)
+                    {openedProjects.includes(project.name) && hasCommits && (
+                      <div style={{ paddingLeft: '24px', marginBottom: '8px' }}>
+                        {Object.entries(grouped).map(([commitSha, commitGroup]) => 
+                          renderCommitGroup(project.name, commitGroup)
+                        )}
+                      </div>
                     )}
                   </div>
-                )}
-              </div>
-            );
-          })}
+                );
+              })}
+            </>
+          )}
         </div>}
         {timeTrackingMethod == "stopwatch" && 
         <div style={{ color: "#000", height: "100%" }}>
