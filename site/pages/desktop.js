@@ -364,11 +364,7 @@ export default function Home() {
                       padding: "8px 16px",
                       fontFamily: "M PLUS Rounded 1c",
                       fontSize: "24px",
-                      border: "1px solid #FFF9E6",
                       background: "none",
-                      cursor: "pointer",
-                      backgroundColor: "#007C74",
-                      backgroundColor: "#007C74",
                       display: "flex",
                       flexDirection: "row",
                       color: "#FFF9E6",
@@ -391,6 +387,8 @@ export default function Home() {
                           color: "#FFF9E6",
                           fontWeight: "bold",
                           margin: 0,
+                          alignSelf: "flex-end",
+                          justifySelf: "flex-end",
                         }}
                       >
                         {currentTime}
@@ -399,9 +397,11 @@ export default function Home() {
                         style={{
                           fontFamily: "M PLUS Rounded 1c",
                           fontSize: "16px",
-                          color: "#6c5434",
                           marginLeft: "4px",
                           fontWeight: "bold",
+                          justifySelf: "flex-end",
+                          alignSelf: "flex-end",
+                          paddingBottom: 4,
                         }}
                       >
                         {isAM ? "am" : "pm"}
@@ -409,7 +409,20 @@ export default function Home() {
                     </div>
 
                     {/* Weather Icon */}
-                    <div className="weathericon">{weatherTexture}</div>
+                    <div
+                      className="weathericon"
+                      style={{
+                        height: "100%",
+                      }}
+                    >
+                      <img
+                        style={{
+                          height: "100%",
+                          paddingLeft: 8,
+                        }}
+                        src={weatherTexture}
+                      />
+                    </div>
                   </div>
                 </div>
               )}
