@@ -90,11 +90,18 @@ export default function Home() {
   useEffect(() => {
     if (router.isReady) {
       const { name, email, birthday } = router.query;
+      // Convert ISO date format to YYYY-MM-DD if needed
+      const formattedBirthday = birthday ? 
+        birthday.includes('T') ? 
+          new Date(birthday).toISOString().split('T')[0] : 
+          birthday : 
+        '';
+      
       setFormData(prev => ({
         ...prev,
         name: name || prev.name,
         email: email || prev.email,
-        birthday: birthday || prev.birthday
+        birthday: formattedBirthday || prev.birthday
       }));
       if (birthday) {
         setHasBirthdayFocus(true);
@@ -457,7 +464,7 @@ export default function Home() {
           left: 0,
           right: 0,
           bottom: 0,
-          backgroundColor: 'rgba(0, 0, 0, 0.9)',
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
           display: 'flex',
           justifyContent: 'center',
           alignItems: 'center',
@@ -474,10 +481,10 @@ export default function Home() {
             display: "flex",
             flexDirection: "column",
             position: 'relative', 
-            padding: 16,
+            padding: 32,
             fontFamily: "'Caveat', cursive",
             fontSize: "20px",
-            lineHeight: "1.4",
+            lineHeight: "1.8",
             letterSpacing: "0.5px",
             backgroundSize: "cover",
             backgroundColor: "#FFF9E6",
@@ -485,21 +492,18 @@ export default function Home() {
             overflowY: 'auto',
             WebkitOverflowScrolling: 'touch'
           }}>
-              <p style={{fontSize: "24px", fontWeight: "700"}}>Hey, Thomas here!</p>
-              <p style={{transform: "rotate(-0.5deg)"}}>
-                Today (May 1st), we're launching Neighborhood, our first guaranteed housing program. If you ship an app with 100 hours of coding (& {"<3"}) put into it this May, you're guaranteed a flight stipend, housing, and food for the Summer in San Francisco. 
+              <p style={{fontSize: "24px", fontWeight: "700"}}>Thursday, May 1 10:46 AM EST - <b style={{color: "red"}}>Thomas</b></p>
+              <p style={{transform: "rotate(-0.5deg)", fontSize: 32}}>
+                Today (May 1st), we're launching Neighborhood, our first guaranteed housing program. If you ship an app with 100 hours of coding (& {"<3"}) put into it, this May, you're guaranteed a flight stipend, housing, and food for the Summer in San Francisco. 
               </p>
-              <p style={{transform: "rotate(0.5deg)"}}>
+              {/* <p style={{transform: "rotate(0.5deg)"}}>
                 We're renting a bunch of houses (as many as we need) in San Francisco for high school hackers to come and build apps together. So long as you code 40 hours per week on your own projects while you're living in SF, you're welcome to stay as long as you'd like!
-              </p>
-              <video style={{width: "100%", backgroundColor: "#000", maxWidth: "320px", aspectRatio: "16/9"}}></video>
-              <p style={{transform: "rotate(-0.3deg)"}}>
+              </p> */}
+              <video style={{width: "100%", backgroundColor: "#000", maxWidth: "520px", aspectRatio: "16/9"}}></video>
+              {/* <p style={{transform: "rotate(-0.3deg)"}}>
                 I have an idea for an app that I have wanted to ship for the past 6 years, and maybe you're in a similar boat (if not, that's okay too). The first step (after signing up) is to share what app you'd like to create this month.
-              </p>
-              <p style={{transform: "rotate(-0.2deg)"}}>Once you have your app idea, you can share it into the challenges app in Neighborhood!</p>
-              <p style={{transform: "rotate(0.3deg)"}}>You're not doing this alone, you're doing it alongside me & and bunch friendly hack clubbers making their own apps too. We'll help each other along the way</p>
-              <p style={{transform: "rotate(0.2deg)"}}>Kickoff call is 7:30 PM EST on May 9th, I look forward to seeing you there :)</p>
-              <p style={{transform: "rotate(-0.4deg)", fontSize: "16px"}}><i>pssst... checkout <a style={{color: "#007C74", textDecoration: "underline"}} href="https://youtube.com/playlist?list=PLbNbddgD-XxH0TDS6qFynB6-YnWZU5Fhc&si=vMATC4c3VDzUuqwR">this documentary from Juice</a>, our popup game cafe in Shanghai, China</i></p>
+              </p> */}
+              {/* <p style={{transform: "rotate(-0.4deg)", fontSize: "16px"}}><i>pssst... checkout <a style={{color: "#007C74", textDecoration: "underline"}} href="https://youtube.com/playlist?list=PLbNbddgD-XxH0TDS6qFynB6-YnWZU5Fhc&si=vMATC4c3VDzUuqwR">this documentary from Juice</a>, our popup game cafe in Shanghai, China</i></p> */}
           </div>
         </div>
       )}
@@ -510,7 +514,7 @@ export default function Home() {
           left: 0,
           right: 0,
           bottom: 0,
-          backgroundColor: 'rgba(0, 0, 0, 0.9)',
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
           display: 'flex',
           justifyContent: 'center',
           alignItems: 'center',

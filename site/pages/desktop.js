@@ -66,6 +66,7 @@ export default function Home() {
   fetchWeather();
 
   const banjoSound = useRef(null);
+  const backgroundMusic = useRef(null);
 
   function classifyWeather(condition) {
     const c = condition.toLowerCase();
@@ -134,7 +135,18 @@ export default function Home() {
 
     // Initialize audio
     banjoSound.current = new Audio("/banjo.mp3");
+    backgroundMusic.current = new Audio('/littlething.mp3');
+    backgroundMusic.current.loop = true;
   }, [hasEnteredNeighborhood]);
+
+  useEffect(() => {
+    if (!UIPage && backgroundMusic.current) {
+      backgroundMusic.current.play();
+    } else if (backgroundMusic.current) {
+      backgroundMusic.current.pause();
+      backgroundMusic.current.currentTime = 0;
+    }
+  }, [UIPage]);
 
   const playBanjoSound = () => {
     if (banjoSound.current) {
