@@ -1,24 +1,37 @@
-import Head from "next/head";
-import Image from "next/image";
-import { useEffect, useRef, useState } from "react";
-import * as THREE from "three";
-import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader";
-import * as RAPIER from "@dimforge/rapier3d-compat";
+import { useEffect, useRef } from 'react';
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
 
-// Helper function to create toon gradient
-const createToonGradient = () => {
-  // Create a more detailed gradient optimized for saturated colors
-  const data = new Uint8Array([
-    20, 20, 20, 255,    // Darker shadow but not pure black
-    80, 80, 80, 255,    // Mid shadow
-    140, 140, 140, 255, // Mid tone
-    200, 200, 200, 255, // Light tone
-    240, 240, 240, 255  // Bright but not pure white
-  ]);
-  const texture = new THREE.DataTexture(data, 5, 1, THREE.RGBAFormat);
+// Function to create a toon gradient texture
+function createToonGradient() {
+  const canvas = document.createElement('canvas');
+  canvas.width = 4;
+  canvas.height = 1;
+  const context = canvas.getContext('2d');
+  
+  // Create gradient
+  const gradient = context.createLinearGradient(0, 0, canvas.width, 0);
+  gradient.addColorStop(0.0, '#444444');
+  gradient.addColorStop(0.33, '#888888');
+  gradient.addColorStop(0.66, '#cccccc');
+  gradient.addColorStop(1.0, '#ffffff');
+  
+  // Fill with gradient
+  context.fillStyle = gradient;
+  context.fillRect(0, 0, canvas.width, canvas.height);
+  
+  const texture = new THREE.CanvasTexture(
+    canvas,
+    THREE.UVMapping,
+    THREE.ClampToEdgeWrapping,
+    THREE.ClampToEdgeWrapping,
+    THREE.NearestFilter,
+    THREE.NearestFilter
+  );
   texture.needsUpdate = true;
+  
   return texture;
-};
+}
 
 export default function NeighborhoodEnvironment({ hasEnteredNeighborhood, setHasEnteredNeighborhood }) {
   const containerRef = useRef(null);
@@ -29,9 +42,6 @@ export default function NeighborhoodEnvironment({ hasEnteredNeighborhood, setHas
   const mixerRef = useRef(null);
   const currentActionRef = useRef(null);
   const animationsRef = useRef(null);
-  const worldRef = useRef(null);
-  const playerRigidBodyRef = useRef(null);
-  const debugMeshesRef = useRef([]);
   const keysRef = useRef({
     w: false,
     a: false,
@@ -41,123 +51,91 @@ export default function NeighborhoodEnvironment({ hasEnteredNeighborhood, setHas
     space: false,
     escape: false
   });
-  const idleActionRef = useRef(null);
-  const runActionRef = useRef(null);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
-    // Initialize Rapier physics
-    const initPhysics = async () => {
-      await RAPIER.init();
-      
-      // Create physics world
-      const gravity = new RAPIER.Vector3(0.0, -9.81, 0.0);
-      const world = new RAPIER.World(gravity);
-      worldRef.current = world;
-
-      // Create ground collider
-      const groundColliderDesc = RAPIER.ColliderDesc.cuboid(500.0, 0.1, 500.0);
-      const groundCollider = world.createCollider(groundColliderDesc);
-
-      // Create player rigid body
-      const playerRigidBodyDesc = RAPIER.RigidBodyDesc.dynamic()
-        .setTranslation(0.0, 2.0, 0.0)
-        .setLinearDamping(0.5)
-        .setAngularDamping(0.5)
-        .lockRotations();
-      
-      const playerRigidBody = world.createRigidBody(playerRigidBodyDesc);
-      
-      // Create capsule collider for player
-      const playerColliderDesc = RAPIER.ColliderDesc.capsule(0.5, 0.5)
-        .setFriction(0.2)
-        .setRestitution(0.0);
-      
-      world.createCollider(playerColliderDesc, playerRigidBody);
-      playerRigidBodyRef.current = playerRigidBody;
-    };
-
-    initPhysics();
-
     // Camera settings
     const cameraSettings = {
       start: {
-        position: new THREE.Vector3(4, 4, 3),
-        lookAt: new THREE.Vector3(-0.5, 2.4, 0),
-        fov: 45
+        position: new THREE.Vector3(2, 3, 1), // Positioned to the right (+x) while staying close
+        lookAt: new THREE.Vector3(-0.5, 2.4, 0),  // Looking slightly left to keep character in frame
+        fov: 45 // Zoomed in FOV for close-up
       },
       end: {
-        position: new THREE.Vector3(0, 3, 6),
-        offset: new THREE.Vector3(0, 3, 6),
-        fov: 75
+        position: new THREE.Vector3(0, 3, 6), // Centered position
+        offset: new THREE.Vector3(0, 3, 6),   // Matching offset
+        fov: 75 // Wider FOV for gameplay
       }
     };
 
-    // Setup scene with vibrant sky color
-    const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x6ecfff); // Brighter, more saturated blue
-    scene.fog = new THREE.Fog(scene.background, 80, 160); // Increased fog distance for better visibility
+    // Add a lookAt target for gameplay that's ahead of the player
+    const gameplayLookAtOffset = new THREE.Vector3(0, 2, 0); // Look further ahead and up
 
-    // Create container for player
+    // Setup scene with Animal Crossing sky color
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x88d7ee); // Lighter blue like Animal Crossing
+    
+    // Add fog that matches sky color for smooth distance fading
+    const fogColor = new THREE.Color(0x88d7ee);
+    scene.fog = new THREE.Fog(fogColor, 60, 140); // Start fading at 80 units, complete fade by 140 units
+    
+    // Create a container for the camera and player
     const container = new THREE.Object3D();
     scene.add(container);
 
-    // Setup camera
-    const camera = new THREE.PerspectiveCamera(
-      cameraSettings.start.fov,
-      window.innerWidth / window.innerHeight,
-      0.1,
-      1000
-    );
+    // Set up camera - scene level, not attached to container
+    const camera = new THREE.PerspectiveCamera(cameraSettings.start.fov, window.innerWidth / window.innerHeight, 0.1, 1000);
     cameraRef.current = camera;
     camera.position.copy(cameraSettings.start.position);
-    scene.add(camera);
+    scene.add(camera); // Add to scene, not container
 
     // Enhanced lighting setup
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6); // Softer ambient for better contrast
+    const ambientLight = new THREE.AmbientLight(0xffffff, 1.0);
     scene.add(ambientLight);
 
-    const dirLight = new THREE.DirectionalLight(0xffffff, 1.2); // Brighter main light
-    dirLight.position.set(5, 8, 5);
+    // Add directional light for better shadows and definition
+    const dirLight = new THREE.DirectionalLight(0xffffff, 1.0);
+    dirLight.position.set(5, 5, 5);
     scene.add(dirLight);
 
-    // Add secondary directional light for better definition
-    const secondaryDirLight = new THREE.DirectionalLight(0xffd500, 0.3); // Warm secondary light
-    secondaryDirLight.position.set(-3, 4, -2);
-    scene.add(secondaryDirLight);
+    // Add point light for additional illumination
+    const pointLight = new THREE.PointLight(0xffffff, 1.0);
+    pointLight.position.set(-5, 5, -5);
+    scene.add(pointLight);
 
-    // Add hemisphere light for better color blending
-    const hemiLight = new THREE.HemisphereLight(0x6ecfff, 0x8dc63f, 0.5); // Sky color to ground color
-    scene.add(hemiLight);
-
-    // Setup renderer
-    const renderer = new THREE.WebGLRenderer({
+    // Setup renderer with toon rendering settings
+    const renderer = new THREE.WebGLRenderer({ 
       antialias: true,
       alpha: true,
       powerPreference: "low-power"
     });
     renderer.setPixelRatio(window.devicePixelRatio);
     renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setClearColor(0x000000, 0);
     
     if (containerRef.current) {
       containerRef.current.appendChild(renderer.domElement);
     }
 
-    // Create ground
+    // Create floor plane with Animal Crossing grass color
     const planeGeometry = new THREE.PlaneGeometry(1000, 1000);
-    const texture = new THREE.TextureLoader().load('/animal-crossing.png');
+    
+    // Load and configure the texture
+    const textureLoader = new THREE.TextureLoader();
+    const texture = textureLoader.load('/animal-crossing.png');
     texture.wrapS = THREE.RepeatWrapping;
     texture.wrapT = THREE.RepeatWrapping;
     texture.repeat.set(500, 500);
     
+    // Create custom toon material for the ground
     const groundMaterial = new THREE.MeshToonMaterial({
       map: texture,
       gradientMap: createToonGradient(),
-      color: 0x95d645, // More saturated grass color
+      color: 0x8dc63f, // Brighter, more vibrant grass green
       side: THREE.DoubleSide,
-      emissive: 0x2a5d2a, // Deeper green emissive
-      emissiveIntensity: 0.3 // Increased intensity
+      emissive: 0x1a4d1a, // Slight green glow
+      emissiveIntensity: 0.2
     });
     
     const plane = new THREE.Mesh(planeGeometry, groundMaterial);
@@ -165,20 +143,24 @@ export default function NeighborhoodEnvironment({ hasEnteredNeighborhood, setHas
     plane.position.y = 0;
     scene.add(plane);
 
-    // Load map
+
+    let mapModel = null;
+
     const maploader = new GLTFLoader();
     maploader.setPath('/models/');
-    
-    maploader.load('sf_map_3.glb', function (gltf) {
-      const mapModel = gltf.scene;
-      mapModel.scale.set(3.0, 3.0, 3.0);
-      mapModel.position.set(0.0, -0.01, 0.0);
-      scene.add(mapModel);
 
-      // Add toon materials and create colliders
+    //load map
+    maploader.load( 'sf_map_3.glb', function ( gltf ) {
+      mapModel = gltf.scene
+      mapModel.scale.set(3.0, 3.0, 3.0);
+      mapModel.position.set(0.0, -0.01, 0.0)
+      scene.add( gltf.scene );
+      // Add toon shading to existing materials
+      //THREE.ColorManagement.legacyMode = false
       mapModel.traverse((child) => {
         if (child.isMesh) {
           const originalMaterial = child.material;
+          // Create a new toon material that preserves the original textures
           const toonMaterial = new THREE.MeshToonMaterial({
             map: originalMaterial.map,
             normalMap: originalMaterial.normalMap,
@@ -189,188 +171,150 @@ export default function NeighborhoodEnvironment({ hasEnteredNeighborhood, setHas
             opacity: originalMaterial.opacity
           });
           child.material = toonMaterial;
-
-          // Create trimesh collider for map geometry
-          const vertices = [];
-          const indices = [];
-          
-          // Get vertices and indices
-          const positions = child.geometry.attributes.position.array;
-          
-          // Create a matrix to transform vertices
-          child.updateWorldMatrix(true, false);
-          const worldMatrix = child.matrixWorld;
-          const tempVector = new THREE.Vector3();
-          
-          // Transform vertices using world matrix
-          for (let i = 0; i < positions.length; i += 3) {
-            tempVector.set(
-              positions[i],
-              positions[i + 1],
-              positions[i + 2]
-            );
-            tempVector.applyMatrix4(worldMatrix);
-            vertices.push(tempVector.x, tempVector.y, tempVector.z);
-          }
-          
-          if (child.geometry.index) {
-            indices.push(...child.geometry.index.array);
-          } else {
-            for (let i = 0; i < positions.length / 3; i++) {
-              indices.push(i);
-            }
-          }
-
-          // Create trimesh collider
-          if (vertices.length > 0 && indices.length > 0) {
-            const trimeshDesc = RAPIER.ColliderDesc.trimesh(
-              new Float32Array(vertices),
-              new Uint32Array(indices)
-            );
-            const rigidBodyDesc = RAPIER.RigidBodyDesc.fixed();
-            const rigidBody = worldRef.current.createRigidBody(rigidBodyDesc);
-            worldRef.current.createCollider(trimeshDesc, rigidBody);
-          }
         }
       });
-    });
+    }, undefined, function ( error ) {
+    
+      console.error( error );
+    
+    } );
 
-    // Load player model
+
+
+    // Load player model with materials
     const gltfLoader = new GLTFLoader();
     gltfLoader.setPath('/models/');
     
-    gltfLoader.load('player.glb', (gltf) => {
-      const playerModel = gltf.scene;
-      playerModel.scale.set(0.027, 0.027, 0.027);
-      playerModel.rotation.y = Math.PI / 2;
-      
-      // Position the player model based on neighborhood state
-      if (hasEnteredNeighborhood) {
-        playerModel.position.y = -0.5;
-      } else {
-        // Position player in front of starting camera
-        playerModel.position.copy(cameraSettings.start.lookAt);
-        playerModel.position.y = 1.4; // Lower the player's position
-        playerModel.rotation.y = Math.PI * 0.01; // Continue rotating to reach the correct spot
-      }
+    let playerModel = null;
 
-      // Add toon materials
-      playerModel.traverse((child) => {
-        if (child.isMesh) {
-          const originalMaterial = child.material;
+    
+    gltfLoader.load(
+      'player.glb',
+      (gltf) => {
+        playerModel = gltf.scene;
+        playerModel.scale.set(0.027, 0.027, 0.027);
+        playerModel.rotation.y = (Math.PI / 4) * -1; // Rotate 180 degrees to face backward
+
+        // Add toon shading to existing materials
+        playerModel.traverse((child) => {
+          if (child.isMesh) {
+            const originalMaterial = child.material;
+            // Create a new toon material that preserves the original textures
+            const toonMaterial = new THREE.MeshToonMaterial({
+              map: originalMaterial.map,
+              normalMap: originalMaterial.normalMap,
+              gradientMap: createToonGradient(),
+              side: THREE.DoubleSide,
+              color: originalMaterial.color,
+              transparent: originalMaterial.transparent,
+              opacity: originalMaterial.opacity
+            });
+            child.material = toonMaterial;
+          }
+        });
+
+        // Set up animations
+        if (gltf.animations && gltf.animations.length > 0) {
+          mixerRef.current = new THREE.AnimationMixer(playerModel);
+          animationsRef.current = gltf.animations; // Store animations
           
-          // Create color enhancer function
-          const enhanceColor = (color) => {
-            if (!color) return null;
-            const hsl = {};
-            color.getHSL(hsl);
-            // Increase saturation and lightness
-            hsl.s = Math.min(1, hsl.s * 1.5); // Boost saturation by 50%
-            hsl.l = Math.max(0.3, Math.min(0.7, hsl.l * 1.2)); // Adjust lightness while keeping it balanced
-            const enhancedColor = new THREE.Color().setHSL(hsl.h, hsl.s, hsl.l);
-            return enhancedColor;
-          };
-
-          const toonMaterial = new THREE.MeshToonMaterial({
-            map: originalMaterial.map,
-            normalMap: originalMaterial.normalMap,
-            gradientMap: createToonGradient(),
-            side: THREE.DoubleSide,
-            color: enhanceColor(originalMaterial.color) || new THREE.Color(0xf4d03f), // Enhance color or use warm default
-            transparent: originalMaterial.transparent,
-            opacity: originalMaterial.opacity,
-            emissive: new THREE.Color(0x2a2a2a),
-            emissiveIntensity: 0.1 // Subtle emissive for better definition
-          });
-          child.material = toonMaterial;
+          const idleAnimation = animationsRef.current.find(anim => anim.name.toLowerCase().includes('idle'));
+          const runAnimation = animationsRef.current.find(anim => anim.name.toLowerCase().includes('run'));
+          
+          if (idleAnimation) {
+            const action = mixerRef.current.clipAction(idleAnimation);
+            action.play();
+            currentActionRef.current = action;
+          }
         }
-      });
 
-      // Setup animations
-      if (gltf.animations && gltf.animations.length > 0) {
-        // Store animations first
-        animationsRef.current = gltf.animations;
-        
-        // Create mixer
-        mixerRef.current = new THREE.AnimationMixer(playerModel);
-        
-        // Find animations
-        const idleAnimation = gltf.animations.find(anim => 
-          anim.name.toLowerCase().includes('idle')
-        );
-        const runAnimation = gltf.animations.find(anim => 
-          anim.name.toLowerCase().includes('run')
-        );
-
-        // Create and store actions
-        if (idleAnimation) {
-          const idleAction = mixerRef.current.clipAction(idleAnimation);
-          idleAction.timeScale = 1.0;
-          idleActionRef.current = idleAction;
-          idleAction.play();
-          currentActionRef.current = idleAction;
-        }
-        
-        if (runAnimation) {
-          const runAction = mixerRef.current.clipAction(runAnimation);
-          runAction.timeScale = 1.0;
-          runActionRef.current = runAction;
-        }
+        container.add(playerModel);
+        playerRef.current = playerModel;
+      },
+      (xhr) => {
+        console.log((xhr.loaded / xhr.total * 100) + '% loaded');
+      },
+      (error) => {
+        console.error('An error occurred while loading the model:', error);
       }
+    );
 
-      container.add(playerModel);
-      playerRef.current = playerModel;
-
-      // Update camera position
-      if (hasEnteredNeighborhood) {
-        const cameraOffset = new THREE.Vector3(0, 3, 6);
-        cameraOffset.applyAxisAngle(new THREE.Vector3(0, 1, 0), container.rotation.y);
-        camera.position.copy(container.position).add(cameraOffset);
-        camera.lookAt(container.position);
-      } else {
-        camera.position.copy(cameraSettings.start.position);
-        camera.lookAt(cameraSettings.start.lookAt);
-      }
-    });
+    // Position container to start at ground level
+    container.position.y = 0; // Place directly on ground
 
     // Movement settings
     const movementSettings = {
-      moveSpeed: 5.0,
-      sprintSpeed: 8.0,
-      rotationSpeed: 0.1,
-      jumpForce: 5.0
+      moveSpeed: 0.05,
+      sprintSpeed: 0.1,
+      rotationSpeed: 0.02,
+      jumpHeight: 0.5,
+      gravity: 0.015
+    };
+
+    // Jump state
+    const jumpState = {
+      isJumping: false,
+      jumpVelocity: 0,
+      groundY: 0 // Changed from -1 to 0 since plane is at y=0
     };
 
     // Handle keyboard controls
     const handleKeyDown = (event) => {
-      if (!hasEnteredNeighborhood || !playerRigidBodyRef.current) return;
+      if (!hasEnteredNeighborhood) return;
       
-      const key = event.key.toLowerCase();
-      if (key in keysRef.current) {
-        keysRef.current[key] = true;
-      }
-
-      // Handle escape
-      if (key === 'escape') {
-        setHasEnteredNeighborhood(false);
-      }
-
-      // Handle jump
-      if (key === ' ' && !keysRef.current.space) {
-        const velocity = playerRigidBodyRef.current.linvel();
-        if (Math.abs(velocity.y) < 0.1) { // Only jump if near ground
-          playerRigidBodyRef.current.setLinvel(
-            new RAPIER.Vector3(velocity.x, movementSettings.jumpForce, velocity.z),
-            true
-          );
-        }
+      switch (event.key.toLowerCase()) {
+        case 'w':
+          keysRef.current.w = true;
+          break;
+        case 'a':
+          keysRef.current.a = true;
+          break;
+        case 's':
+          keysRef.current.s = true;
+          break;
+        case 'd':
+          keysRef.current.d = true;
+          break;
+        case 'shift':
+          keysRef.current.shift = true;
+          break;
+        case ' ':
+          if (!jumpState.isJumping) {
+            jumpState.isJumping = true;
+            jumpState.jumpVelocity = movementSettings.jumpHeight;
+          }
+          keysRef.current.space = true;
+          break;
+        case 'escape':
+          keysRef.current.escape = true;
+          setHasEnteredNeighborhood(false);
+          break;
       }
     };
 
     const handleKeyUp = (event) => {
-      const key = event.key.toLowerCase();
-      if (key in keysRef.current) {
-        keysRef.current[key] = false;
+      switch (event.key.toLowerCase()) {
+        case 'w':
+          keysRef.current.w = false;
+          break;
+        case 'a':
+          keysRef.current.a = false;
+          break;
+        case 's':
+          keysRef.current.s = false;
+          break;
+        case 'd':
+          keysRef.current.d = false;
+          break;
+        case 'shift':
+          keysRef.current.shift = false;
+          break;
+        case ' ':
+          keysRef.current.space = false;
+          break;
+        case 'escape':
+          keysRef.current.escape = false;
+          break;
       }
     };
 
@@ -381,82 +325,172 @@ export default function NeighborhoodEnvironment({ hasEnteredNeighborhood, setHas
       renderer.setSize(window.innerWidth, window.innerHeight);
     };
 
-    // Animation loop
+    // Animation
     const animate = (timestamp) => {
       if (!startTimeRef.current) startTimeRef.current = timestamp;
-      const deltaTime = Math.min((timestamp - startTimeRef.current) / 1000, 0.1);
-      startTimeRef.current = timestamp;
+      const progress = Math.min((timestamp - startTimeRef.current) / 1000, 1);
       
-      // Update physics
-      if (worldRef.current && playerRigidBodyRef.current && hasEnteredNeighborhood) {
-        worldRef.current.step();
-        
-        // Get current state
-        const velocity = playerRigidBodyRef.current.linvel();
-        const position = playerRigidBodyRef.current.translation();
-        
-        // Update movement based on keys
-        const speed = keysRef.current.shift ? 
-          movementSettings.sprintSpeed : 
-          movementSettings.moveSpeed;
-        
-        // Calculate movement direction based on container rotation
-        const moveDir = new THREE.Vector3();
-        
-        if (keysRef.current.w) moveDir.z -= 1;
-        if (keysRef.current.s) moveDir.z += 1;
-        
-        // Rotate character with A/D
-        if (keysRef.current.a) {
-          container.rotation.y += movementSettings.rotationSpeed;
-        }
-        if (keysRef.current.d) {
-          container.rotation.y -= movementSettings.rotationSpeed;
-        }
-        
-        // Apply container's rotation to movement direction
-        moveDir.applyAxisAngle(new THREE.Vector3(0, 1, 0), container.rotation.y);
-        moveDir.normalize();
-        
-        // Set new velocity
-        const newVelocity = new RAPIER.Vector3(
-          moveDir.x * speed,
-          velocity.y, // Preserve vertical velocity
-          moveDir.z * speed
-        );
-        
-        playerRigidBodyRef.current.setLinvel(newVelocity, true);
-        
-        // Update container position
-        container.position.set(position.x, position.y, position.z);
-        
-        // Update camera position
-        const cameraOffset = new THREE.Vector3(0, 3, 6);
-        cameraOffset.applyAxisAngle(new THREE.Vector3(0, 1, 0), container.rotation.y);
-        camera.position.copy(container.position).add(cameraOffset);
-        camera.lookAt(container.position);
-      }
-      
-      // Update animations
+      // Update animation mixer
       if (mixerRef.current && animationsRef.current) {
+        const deltaTime = (timestamp - startTimeRef.current) / 1000;
         mixerRef.current.update(deltaTime);
         
+        // Check if player is moving (W or S key pressed)
         const isMoving = keysRef.current.w || keysRef.current.s;
-        const currentAnim = currentActionRef.current?.getClip().name.toLowerCase() || '';
         
-        if (isMoving && !currentAnim.includes('run') && runActionRef.current) {
+        // Find appropriate animation
+        const idleAnimation = animationsRef.current.find(anim => anim.name.toLowerCase().includes('idle'));
+        const runAnimation = animationsRef.current.find(anim => anim.name.toLowerCase().includes('run'));
+        
+        if (isMoving && runAnimation && currentActionRef.current?.clip !== runAnimation) {
           if (currentActionRef.current) {
             currentActionRef.current.fadeOut(0.2);
           }
-          runActionRef.current.reset().fadeIn(0.2).play();
-          currentActionRef.current = runActionRef.current;
-        } else if (!isMoving && !currentAnim.includes('idle') && idleActionRef.current) {
+          const newAction = mixerRef.current.clipAction(runAnimation);
+          newAction.reset().fadeIn(0.2).play();
+          currentActionRef.current = newAction;
+        } else if (!isMoving && idleAnimation && currentActionRef.current?.clip !== idleAnimation) {
           if (currentActionRef.current) {
             currentActionRef.current.fadeOut(0.2);
           }
-          idleActionRef.current.reset().fadeIn(0.2).play();
-          currentActionRef.current = idleActionRef.current;
+          const newAction = mixerRef.current.clipAction(idleAnimation);
+          newAction.reset().fadeIn(0.2).play();
+          currentActionRef.current = newAction;
         }
+      }
+      
+      // Smooth easing
+      const eased = progress < .5 ? 
+        4 * progress * progress * progress : 
+        1 - Math.pow(-2 * progress + 2, 3) / 2;
+
+      if (hasEnteredNeighborhood) {
+        // Update container position and rotation based on keys
+        if (playerRef.current) {
+          const { moveSpeed, sprintSpeed, rotationSpeed, gravity } = movementSettings;
+          const cameraOffset = cameraSettings.end.offset;
+          
+          // Interpolate FOV
+          camera.fov = THREE.MathUtils.lerp(
+            cameraSettings.start.fov,
+            cameraSettings.end.fov,
+            eased
+          );
+          camera.updateProjectionMatrix(); // Important: must call this after changing FOV
+
+          // Handle rotation with A and D
+          if (keysRef.current.a) {
+            container.rotation.y += rotationSpeed;
+          }
+          if (keysRef.current.d) {
+            container.rotation.y -= rotationSpeed;
+          }
+
+          // Calculate forward direction based on rotation
+          const forward = new THREE.Vector3(0, 0, 1);
+          forward.applyQuaternion(container.quaternion);
+
+          // Handle forward/backward movement with W and S
+          const currentSpeed = keysRef.current.shift ? sprintSpeed : moveSpeed;
+          if (keysRef.current.w) {
+            container.position.add(forward.multiplyScalar(currentSpeed));
+          }
+          if (keysRef.current.s) {
+            container.position.add(forward.multiplyScalar(-currentSpeed));
+          }
+
+          // Handle jumping
+          if (jumpState.isJumping) {
+            container.position.y += jumpState.jumpVelocity;
+            jumpState.jumpVelocity -= gravity;
+            
+            // Check if landed (accounting for cube height)
+            if (container.position.y <= jumpState.groundY) {
+              container.position.y = jumpState.groundY;
+              jumpState.isJumping = false;
+              jumpState.jumpVelocity = 0;
+            }
+          }
+
+          // Update camera position relative to container
+          if (progress === 1) {
+            // Position camera behind player based on container's rotation
+            const cameraAngle = container.rotation.y;
+            const distance = 6;
+            const height = 3;
+            
+            // Position camera directly behind player
+            camera.position.set(
+              container.position.x - Math.sin(cameraAngle) * distance,
+              container.position.y + height,
+              container.position.z - Math.cos(cameraAngle) * distance
+            );
+            
+            // Look ahead of player
+            const lookAtTarget = new THREE.Vector3(
+              container.position.x + Math.sin(cameraAngle) * gameplayLookAtOffset.z,
+              container.position.y + gameplayLookAtOffset.y,
+              container.position.z + Math.cos(cameraAngle) * gameplayLookAtOffset.z
+            );
+            camera.lookAt(lookAtTarget);
+          } else {
+            // During transition
+            const currentPosition = new THREE.Vector3();
+            currentPosition.lerpVectors(
+              cameraSettings.start.position,
+              new THREE.Vector3(
+                container.position.x - Math.sin(container.rotation.y) * 4,
+                container.position.y + 4, // Match the new height
+                container.position.z - Math.cos(container.rotation.y) * 4
+              ),
+              eased
+            );
+            camera.position.copy(currentPosition);
+            
+            // Smoothly transition the look target
+            const startLookAt = cameraSettings.start.lookAt;
+            const endLookAt = new THREE.Vector3(
+              container.position.x,
+              container.position.y + 0.5, // Match the new look target
+              container.position.z
+            );
+            const currentLookAt = new THREE.Vector3();
+            currentLookAt.lerpVectors(startLookAt, endLookAt, eased);
+            camera.lookAt(currentLookAt);
+          }
+        }
+      } else {
+        // Reset player and camera positions when exiting
+        if (playerRef.current) {
+          playerRef.current.position.set(0, 0, 0);
+        }
+        
+        if (container) {
+          container.position.set(0, 1.0, 0);
+          container.rotation.set(0, 0, 0);
+        }
+        
+        // Transition camera back to starting position
+        const currentPosition = new THREE.Vector3();
+        currentPosition.lerpVectors(
+          new THREE.Vector3(
+            - Math.sin(container.rotation.y) * 4,
+            4, // Updated height
+            - Math.cos(container.rotation.y) * 4
+          ), 
+          cameraSettings.start.position, 
+          eased
+        );
+        camera.position.copy(currentPosition);
+        
+        // Transition look target
+        const currentLookAt = new THREE.Vector3();
+        currentLookAt.lerpVectors(
+          new THREE.Vector3(0, 0.5, 0), // Updated target height
+          cameraSettings.start.lookAt, 
+          eased
+        );
+        camera.lookAt(currentLookAt);
       }
       
       renderer.render(scene, camera);
@@ -490,8 +524,8 @@ export default function NeighborhoodEnvironment({ hasEnteredNeighborhood, setHas
       if (containerRef.current && renderer.domElement) {
         containerRef.current.removeChild(renderer.domElement);
       }
-      if (playerRef.current) {
-        playerRef.current.traverse((child) => {
+      if (playerModel) {
+        playerModel.traverse((child) => {
           if (child.isMesh) {
             child.geometry.dispose();
             if (Array.isArray(child.material)) {
@@ -506,11 +540,6 @@ export default function NeighborhoodEnvironment({ hasEnteredNeighborhood, setHas
       plane.geometry.dispose();
       plane.material.dispose();
       renderer.dispose();
-      
-      // Cleanup physics
-      if (worldRef.current) {
-        worldRef.current.free();
-      }
     };
   }, [hasEnteredNeighborhood]);
 
