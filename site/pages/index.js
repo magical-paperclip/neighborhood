@@ -90,22 +90,20 @@ export default function Home() {
   useEffect(() => {
     if (router.isReady) {
       const { name, email, birthday } = router.query;
-      // Convert ISO date format to YYYY-MM-DD if needed
-      const formattedBirthday = birthday ? 
-        birthday.includes('T') ? 
-          new Date(birthday).toISOString().split('T')[0] : 
-          birthday : 
-        '';
       
-      setFormData(prev => ({
-        ...prev,
-        name: name || prev.name,
-        email: email || prev.email,
-        birthday: formattedBirthday || prev.birthday
-      }));
+      // Only update fields that are present in the URL
+      const newFormData = { ...formData };
+      if (name) newFormData.name = name;
+      if (email) newFormData.email = email;
       if (birthday) {
+        // Convert ISO date format to YYYY-MM-DD if needed
+        newFormData.birthday = birthday.includes('T') ? 
+          new Date(birthday).toISOString().split('T')[0] : 
+          birthday;
         setHasBirthdayFocus(true);
       }
+      
+      setFormData(newFormData);
     }
   }, [router.isReady, router.query]);
 

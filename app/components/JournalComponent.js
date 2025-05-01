@@ -7,13 +7,13 @@ const RESIZE_HOTZONE = 4; // px
 // function getApiBase() {
 //   return window.location.hostname === 'localhost'
 //     ? 'http://localhost:3001/api'
-//     : 'https://neighborhood.hackclub.dev/api';
+//     : 'https://neighborhood.hackclub.com/api';
 // }
 
 function getApiBase() {
   return window.location.hostname === 'localhost'
-    ? 'https://neighborhood.hackclub.dev/api'
-    : 'https://neighborhood.hackclub.dev/api';
+    ? 'https://neighborhood.hackclub.com/api'
+    : 'https://neighborhood.hackclub.com/api';
 }
 
 
