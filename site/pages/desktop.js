@@ -199,8 +199,8 @@ export default function Home() {
               left: "40px",
               right: "40px",
               bottom: "40px",
-              zIindex: 2,
-              pointerEvents: UIPage ? "auto" : "none",
+              zIndex: 2,
+              pointerEvents: UIPage || showNeighborhoodPopup ? "auto" : "none",
             }}
           >
             {showNeighborhoodPopup && (
