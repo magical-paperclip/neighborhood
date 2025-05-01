@@ -210,7 +210,8 @@ export default async function handler(req, res) {
         name: real_name,
         profilePicture: image_72,
         slackId: slack_id,
-        slackHandle: display_name
+        slackHandle: display_name,
+        email: userEmail
       });
 
     } catch (error) {
