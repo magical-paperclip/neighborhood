@@ -375,7 +375,7 @@ export default function Home() {
                       color: "#B8D4FF",
                       fontWeight: "500"
                     }}>
-                      Check your email for the mobile app download link
+                      Check your email for the app download link for your computer :)
                     </div>
                   )}
                 </div>
