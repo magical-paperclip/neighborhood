@@ -8,6 +8,7 @@ import RewardsComponent from "@/components/RewardsComponent";
 import JournalComponent from "@/components/JournalComponent";
 import BulletinComponent from "@/components/BulletinComponent";
 import HackTimeComponent from "@/components/HackTimeComponent";
+import NeighborhoodPopup from "@/components/NeighborhoodPopup";
 import { useState, useEffect, useRef } from "react";
 import { getToken, removeToken } from "@/utils/storage";
 import { updateSlackUserData } from "@/utils/slack";
@@ -20,6 +21,7 @@ export default function Home() {
   const [isExiting, setIsExiting] = useState(false);
   const [userData, setUserData] = useState();
   const [token, setToken] = useState("");
+  const [showNeighborhoodPopup, setShowNeighborhoodPopup] = useState(false);
 
   const banjoSound = useRef(null);
 
@@ -87,6 +89,9 @@ export default function Home() {
       </Head>
       {isSignedIn ? 
       <>
+      {showNeighborhoodPopup && (
+        <NeighborhoodPopup onClose={() => setShowNeighborhoodPopup(false)} />
+      )}
       {(UIPage == "rewards" || (isExiting && UIPage === "rewards")) && 
         <RewardsComponent 
           isExiting={isExiting}
@@ -133,7 +138,7 @@ export default function Home() {
         <div style={{position: "absolute", right: 16, bottom: 16}}>
           {!hasEnteredNeighborhood &&
           <button 
-          onClick={() => alert("The online Neighborhood Game Server will launch on our kickoff call at 7:30 PM EST on May 9th! From that launch on on, you'll be able to explore the Neighborhood.")}
+          onClick={() => setShowNeighborhoodPopup(true)}
             style={{
               padding: "8px 16px",
               opacity: 0.3,
