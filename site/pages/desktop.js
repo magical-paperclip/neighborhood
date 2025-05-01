@@ -96,45 +96,57 @@ export default function Home() {
       </Head>
       {isSignedIn ? (
         <>
-          {showNeighborhoodPopup && (
-            <NeighborhoodPopup
-              onClose={() => setShowNeighborhoodPopup(false)}
-            />
-          )}
-          {(UIPage == "rewards" || (isExiting && UIPage === "rewards")) && (
-            <RewardsComponent
-              isExiting={isExiting}
-              onClose={handleCloseComponent}
-              setUIPage={setUIPage}
-            />
-          )}
-          {(UIPage == "journal" || (isExiting && UIPage === "journal")) && (
-            <JournalComponent
-              isExiting={isExiting}
-              token={token}
-              onClose={handleCloseComponent}
-            />
-          )}
-          {(UIPage == "bulletin" || (isExiting && UIPage === "bulletin")) && (
-            <BulletinComponent
-              isExiting={isExiting}
-              onClose={handleCloseComponent}
-            />
-          )}
-          {(UIPage == "challenges" ||
-            (isExiting && UIPage === "challenges")) && (
-            <ChallengesComponent
-              isExiting={isExiting}
-              onClose={handleCloseComponent}
-            />
-          )}
-          {(UIPage == "start" || (isExiting && UIPage === "start")) && (
-            <HackTimeComponent
-              isExiting={isExiting}
-              onClose={handleCloseComponent}
-              userData={userData}
-            />
-          )}
+          <div
+            style={{
+              position: "absolute",
+              top: "40px",
+              left: "40px",
+              right: "40px",
+              bottom: "40px",
+              zIindex: 2,
+              pointerEvents: UIPage ? "auto" : "none",
+            }}
+          >
+            {showNeighborhoodPopup && (
+              <NeighborhoodPopup
+                onClose={() => setShowNeighborhoodPopup(false)}
+              />
+            )}
+            {(UIPage == "rewards" || (isExiting && UIPage === "rewards")) && (
+              <RewardsComponent
+                isExiting={isExiting}
+                onClose={handleCloseComponent}
+                setUIPage={setUIPage}
+              />
+            )}
+            {(UIPage == "journal" || (isExiting && UIPage === "journal")) && (
+              <JournalComponent
+                isExiting={isExiting}
+                token={token}
+                onClose={handleCloseComponent}
+              />
+            )}
+            {(UIPage == "bulletin" || (isExiting && UIPage === "bulletin")) && (
+              <BulletinComponent
+                isExiting={isExiting}
+                onClose={handleCloseComponent}
+              />
+            )}
+            {(UIPage == "challenges" ||
+              (isExiting && UIPage === "challenges")) && (
+              <ChallengesComponent
+                isExiting={isExiting}
+                onClose={handleCloseComponent}
+              />
+            )}
+            {(UIPage == "start" || (isExiting && UIPage === "start")) && (
+              <HackTimeComponent
+                isExiting={isExiting}
+                onClose={handleCloseComponent}
+                userData={userData}
+              />
+            )}
+          </div>
 
           <NeighborhoodEnvironment
             hasEnteredNeighborhood={hasEnteredNeighborhood}
@@ -147,11 +159,8 @@ export default function Home() {
                 width: "100%",
                 gap: 32,
                 justifyContent: "space-between",
-                paddingTop: 16,
-                paddingBottom: 16,
                 display: "flex",
                 flexDirection: "column",
-                paddingLeft: 32,
               }}
             >
               <div style={{ position: "absolute", right: 16, top: 16 }}>
@@ -190,7 +199,17 @@ export default function Home() {
 
               {!hasEnteredNeighborhood && (
                 <div
-                  style={{ display: "flex", flexDirection: "column", gap: 16 }}
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 16,
+                    backgroundColor: "#007C74",
+                    paddingLeft: 32,
+                    paddingTop: 32,
+                    paddingRight: 32,
+                    height: "100%",
+                    width: "fit-content",
+                  }}
                 >
                   <img
                     style={{ width: 250, imageRendering: "pixelated" }}
@@ -240,26 +259,6 @@ export default function Home() {
                       </p>
                     </div>
                   ))}
-                </div>
-              )}
-
-              {!hasEnteredNeighborhood && (
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    flexDirection: "column",
-                  }}
-                >
-                  <p
-                    style={{
-                      color: "#FCEA64",
-                      fontFamily: "M PLUS Rounded 1c",
-                      fontWeight: "bold",
-                    }}
-                  >
-                    made with {"<3"}
-                  </p>
                 </div>
               )}
             </div>

@@ -193,12 +193,12 @@ export default function NeighborhoodEnvironment({
     const cameraSettings = {
       start: {
         position: new THREE.Vector3(1, 20, 1), // High aerial position directly above
-        lookAt: new THREE.Vector3(0, 5, 0), // Looking down at the scene center
+        lookAt: new THREE.Vector3(2.2, 5, 0), // Looking down at the scene center
         fov: 60, // Wider FOV for the overhead view
       },
       end: {
-        position: new THREE.Vector3(0, -30, 0), // Regular gameplay position
-        offset: new THREE.Vector3(0, 20, 12), // Matching offset
+        position: new THREE.Vector3(200, -30, 200), // Regular gameplay position
+        offset: new THREE.Vector3(0, 20, 120), // Matching offset
         fov: 70, // Gameplay FOV
       },
     };
