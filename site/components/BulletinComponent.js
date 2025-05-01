@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { M_PLUS_Rounded_1c } from "next/font/google";
+import { updateSlackUserData } from "@/utils/slack";
 
 const mPlusRounded = M_PLUS_Rounded_1c({
   weight: "400",
@@ -10,6 +11,43 @@ const mPlusRounded = M_PLUS_Rounded_1c({
 const BOARD_BAR_HEIGHT = 145;
 
 const BulletinComponent = ({ isExiting, onClose }) => {
+  const [rsvpStatus, setRsvpStatus] = useState("Sign Up");
+  const [loading, setLoading] = useState(false);
+
+  const handleRSVP = async () => {
+    if (loading) return;
+    setLoading(true);
+    try {
+      let token = null;
+      if (window.electronAPI?.isElectron) {
+        token = await window.electronAPI.getToken();
+      } else {
+        token = localStorage.getItem('neighborhoodToken');
+      }
+      console.log('Token:', token);
+      if (!token) throw new Error("No token found");
+
+      const userData = await updateSlackUserData(token);
+      console.log('UserData:', userData);
+      const email = userData?.email;
+      if (!email) throw new Error("No email found");
+
+      const res = await fetch('/api/rsvp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email })
+      });
+      console.log('RSVP response:', res);
+      if (!res.ok) throw new Error("Failed to RSVP");
+      setRsvpStatus("Sent Cal Invite (Check Email)");
+    } catch (e) {
+      console.error(e);
+      setRsvpStatus("Try Again");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className={`pop-in ${isExiting ? "hidden" : ""} ${mPlusRounded.variable}`} 
       style={{
@@ -125,28 +163,30 @@ const BulletinComponent = ({ isExiting, onClose }) => {
               </p>
             </div>
             
-            <button style={{
-              padding: "8px 16px",
-              backgroundColor: "#f2cf64", 
-              backgroundImage: "bulletintop.jpg",
-              backgroundSize: "cover", 
-              color: "#fff",
-              border: "none",
-              borderRadius: "4px",
-              cursor: "pointer",
-              fontSize: "14px",
-            }}
-            onMouseOver={(e) => e.target.style.backgroundColor = "#FF8486"}
-            onMouseOut={(e) => e.target.style.backgroundColor = "#FF6868"}
-            onClick={() => alert("Sign up successful, see you soon!!")}
+            <button 
+              style={{
+                padding: "8px 16px",
+                backgroundColor: rsvpStatus === "Sent Cal Invite (Check Email)" ? "#78BA99" : "#f2cf64", 
+                backgroundImage: "bulletintop.jpg",
+                backgroundSize: "cover", 
+                color: "#fff",
+                border: "none",
+                borderRadius: "4px",
+                cursor: loading ? "not-allowed" : "pointer",
+                fontSize: "14px",
+                minWidth: 180,
+                opacity: loading ? 0.7 : 1
+              }}
+              disabled={loading || rsvpStatus === "Sent Cal Invite (Check Email)"}
+              onClick={handleRSVP}
             >
-              Sign Up
+              {loading ? "Sending..." : rsvpStatus}
             </button>
           </div>
 
           {/* Box 2 */}
           <div 
-            onClick={() => alert("Not so fast! Join us at the Kick Off Call to find them :)")}
+            onClick={() => window.open('https://hackclub.slack.com/archives/C073L9LB4K1', '_blank')}
             style={{
               width: "100%",
               height: "150px",
