@@ -6,6 +6,7 @@ module.exports = {
   packagerConfig: {
     asar: true,
     prune: true,
+    icon: './icon.icns',
     ignore: [
       "^/node_modules/.cache",
       "^/temp-electron-deps",
@@ -22,12 +23,6 @@ module.exports = {
       entitlements: path.resolve(__dirname, 'entitlements.plist'),
       entitlementsInherit: path.resolve(__dirname, 'entitlements.plist'),
       'gatekeeper-assess': false
-    },
-    osxNotarize: {
-      tool: 'notarytool',
-      appleId: process.env.APPLE_ID,
-      appleIdPassword: process.env.APPLE_ID_PASSWORD,
-      teamId: process.env.APPLE_TEAM_ID
     },
     extraResource: [path.resolve(__dirname, 'entitlements-minimal.plist')]
   },
@@ -67,4 +62,4 @@ module.exports = {
       [FuseV1Options.OnlyLoadAppFromAsar]: true
     })
   ]
-}; 
+};

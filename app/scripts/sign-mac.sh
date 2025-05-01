@@ -105,7 +105,7 @@ elif [[ "$IDENTITY" == *"Apple Development"* ]]; then
 elif [[ "$IDENTITY" == *"Developer ID"* ]]; then
   echo "✅ App is signed with a Developer ID certificate."
   echo "ℹ️ For complete trust, the app should also be notarized with Apple."
-  echo "ℹ️ Run: xcrun notarytool submit \"$APP_PATH\" --apple-id YOUR_APPLE_ID --password YOUR_APP_SPECIFIC_PASSWORD --team-id P6PV2R9443"
+  echo "ℹ️ Run: xcrun notarytool submit \"$APP_PATH\" --apple-id YOUR_APPLE_ID --password YOUR_APP_SPECIFIC_PASSWORD --team-id 2H4LMN3ZLG"
 fi
 
 echo "✅ App signing complete" 

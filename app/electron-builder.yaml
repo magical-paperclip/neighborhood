@@ -3,7 +3,7 @@ productName: "Hack Club Neighborhood"
 copyright: "Copyright (c) 2024 Thomas Stubblefield"
 win:
   target: ["dir", "portable", "zip"]
-  icon: "resources/icon.ico"
+  icon: "resources/icon.icns"
 linux:
   target: ["dir", "appimage", "zip"]
   icon: "resources/icon.png"
@@ -18,6 +18,6 @@ mac:
   enableKeychain: false
   useCacheDirectories: true
   notarize:
-    teamId: "${process.env.APPLE_TEAM_ID}"
-    appleId: "${process.env.APPLE_ID}"
-    appleIdPassword: "${process.env.APPLE_ID_PASSWORD}" 
+    teamId: "2H4LMN3ZLG"
+    appleId: "tstubblefield487@icloud.com"
+    appleIdPassword: "bdhs-blrj-alnz-magr" 

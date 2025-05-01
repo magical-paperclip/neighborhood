@@ -71,8 +71,7 @@ export default function Home() {
   const menuItems = [
     { id: 'start', text: 'Start Hacking' },
     { id: 'challenges', text: 'Challenges' },
-    { id: 'bulletin', text: 'Bulletin' },
-    { id: 'houses', text: 'Houses' },
+    { id: 'bulletin', text: 'Bulletin' }
 
     // { id: 'journal', text: 'Journal' },
     // { id: 'rewards', text: 'Rewards' }
@@ -134,9 +133,10 @@ export default function Home() {
         <div style={{position: "absolute", right: 16, bottom: 16}}>
           {!hasEnteredNeighborhood &&
           <button 
-          onClick={() => setHasEnteredNeighborhood(true)}
+          onClick={() => alert("The online Neighborhood Game Server will launch on our kickoff call at 7:30 PM EST on May 9th! From that launch on on, you'll be able to explore the Neighborhood.")}
             style={{
               padding: "8px 16px",
+              opacity: 0.3,
               fontFamily: "M PLUS Rounded 1c",
               fontSize: "24px",
               border: "1px solid #FFF9E6",
@@ -149,7 +149,7 @@ export default function Home() {
               borderRadius: "8px"
             }}
           >
-            Enter Neighborhood
+            Explore Neighborhood
           </button>}
         </div>
 

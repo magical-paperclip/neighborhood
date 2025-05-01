@@ -58,8 +58,8 @@ export default function NeighborhoodEnvironment({ hasEnteredNeighborhood, setHas
     // Camera settings
     const cameraSettings = {
       start: {
-        position: new THREE.Vector3(2, 2, 1), // Positioned to the right (+x) while staying close
-        lookAt: new THREE.Vector3(-0.5, 1.5, 0),  // Looking slightly left to keep character in frame
+        position: new THREE.Vector3(2, 3, 1), // Positioned to the right (+x) while staying close
+        lookAt: new THREE.Vector3(-0.5, 2.4, 0),  // Looking slightly left to keep character in frame
         fov: 45 // Zoomed in FOV for close-up
       },
       end: {
@@ -466,7 +466,7 @@ export default function NeighborhoodEnvironment({ hasEnteredNeighborhood, setHas
         }
         
         if (container) {
-          container.position.set(0, 0, 0);
+          container.position.set(0, 1.0, 0);
           container.rotation.set(0, 0, 0);
         }
         

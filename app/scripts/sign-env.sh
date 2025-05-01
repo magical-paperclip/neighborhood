@@ -9,4 +9,4 @@ export APPLE_ID=$APPLE_ID
 
 echo "Environment variables set for code signing."
 echo "Apple ID: $APPLE_ID"
-echo "Team ID: P6PV2R9443" 
+echo "Team ID: 2H4LMN3ZLG" 

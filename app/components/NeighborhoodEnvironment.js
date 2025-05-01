@@ -118,7 +118,7 @@ export default function NeighborhoodEnvironment({ hasEnteredNeighborhood, setHas
 
       // Create player rigid body with improved collision properties
       const playerRigidBodyDesc = RAPIER.RigidBodyDesc.dynamic()
-        .setTranslation(0.0, 2.0, 0.0)
+        .setTranslation(0.0, 4.0, 0.0)
         .setLinearDamping(0.1)
         .setAngularDamping(0.5)
         .lockRotations()
