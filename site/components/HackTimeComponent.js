@@ -193,7 +193,7 @@ const HackTimeComponent = ({ isExiting, onClose, userData }) => {
       setCommitData(newCommitData);
 
       // Fetch sessions for all projects
-      const startDate = new Date(2025, 0, 1);
+      const startDate = new Date(2025, 3, 30);
       const formattedDate = startDate.toISOString().split('T')[0];
       
       const projectSessionsPromises = data.data.projects.map(async (project) => {
