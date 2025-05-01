@@ -468,6 +468,7 @@ export default function Home() {
             maxWidth: '700px',
             backgroundColor: "#fff",
             height: "calc(100% - 32px)",
+            maxHeight: "90vh",
             borderRadius: 8,
             gap: 16,
             display: "flex",
@@ -476,11 +477,13 @@ export default function Home() {
             padding: 16,
             fontFamily: "'Caveat', cursive",
             fontSize: "20px",
-            lineHeight: "1.2",
+            lineHeight: "1.4",
             letterSpacing: "0.5px",
             backgroundSize: "cover",
             backgroundColor: "#FFF9E6",
-            boxShadow: "0 0 10px rgba(0,0,0,0.1)"
+            boxShadow: "0 0 10px rgba(0,0,0,0.1)",
+            overflowY: 'auto',
+            WebkitOverflowScrolling: 'touch'
           }}>
               <p style={{fontSize: "24px", fontWeight: "700"}}>Hey, Thomas here!</p>
               <p style={{transform: "rotate(-0.5deg)"}}>
@@ -493,7 +496,7 @@ export default function Home() {
               <p style={{transform: "rotate(-0.3deg)"}}>
                 I have an idea for an app that I have wanted to ship for the past 6 years, and maybe you're in a similar boat (if not, that's okay too). The first step (after signing up) is to share what app you'd like to create this month.
               </p>
-              <p style={{transform: "rotate(-0.2deg)"}}>Once you have your app idea, you can share it into the <a style={{color: "#007C74", textDecoration: "underline"}} href="https://github.com/hackclub/neighborhood/tree/main/app-seeds">App Seeds folder</a> on the Neighborhood GitHub and over the month our seeds will blossom into beautiful flowers (finished apps that we ship to the world) :)</p>
+              <p style={{transform: "rotate(-0.2deg)"}}>Once you have your app idea, you can share it into the challenges app in Neighborhood!</p>
               <p style={{transform: "rotate(0.3deg)"}}>You're not doing this alone, you're doing it alongside me & and bunch friendly hack clubbers making their own apps too. We'll help each other along the way</p>
               <p style={{transform: "rotate(0.2deg)"}}>Kickoff call is 7:30 PM EST on May 9th, I look forward to seeing you there :)</p>
               <p style={{transform: "rotate(-0.4deg)", fontSize: "16px"}}><i>pssst... checkout <a style={{color: "#007C74", textDecoration: "underline"}} href="https://youtube.com/playlist?list=PLbNbddgD-XxH0TDS6qFynB6-YnWZU5Fhc&si=vMATC4c3VDzUuqwR">this documentary from Juice</a>, our popup game cafe in Shanghai, China</i></p>
