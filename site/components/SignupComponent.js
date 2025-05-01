@@ -335,7 +335,7 @@ export default function SignupComponent({ setHasSignedIn }) {
                   />
                 </div>
                 
-                <p style={{color: "#FFF9E6", fontWeight: 700, marginTop: '16px'}}><i>pssst... enter to continue</i></p>
+                <p style={{color: "#FFF9E6", fontWeight: 700, marginTop: '16px', opacity: 0.5}}><i>pssst... same email as earlier pls</i></p>
               </div>
             )}
             {stage === 1 && (
