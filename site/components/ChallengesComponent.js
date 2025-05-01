@@ -404,7 +404,7 @@ const ChallengesComponent = ({ isExiting, onClose }) => {
       title: 'Challenge 1: Get your feet wet!',
       description: 'Get started with your app development journey',
       tasks: [
-        <span key="pr-guide">open a PR for your app idea to Neighborhood GitHub Repo with a PR into the App Seeds folder. Here is a guide on how to make a PR from Juice: <a href="https://youtu.be/7O4qYoWU54M" target="_blank" rel="noopener noreferrer" style={{ color: '#ef758a', textDecoration: 'none' }}>https://youtu.be/7O4qYoWU54M</a></span>,
+        <span key="pr-guide">Share your app name and idea</span>,
         'make a repo for your project and commit the initial project files',
         'start building out the base of your app',
         'attend the kickoff call'
