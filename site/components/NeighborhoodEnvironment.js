@@ -11,7 +11,7 @@ const PastelVibrantShader = {
   uniforms: {
     tDiffuse: { value: null },
     saturation: { value: 1.4 }, // Increased saturation
-    brightness: { value: 1.05 }, // Slight brightness boost
+    brightness: { value: 10 }, // Slight brightness boost
     pastelAmount: { value: 0.2 }, // Controls how pastel the colors appear
     warmth: { value: 0.05 }, // Slight warm tint
     opacity: { value: 1.0 }, // Added for fade in effect
@@ -277,9 +277,9 @@ export default function NeighborhoodEnvironment({
     // Add custom pastel shader for vibrant Animal Crossing style
     const pastelPass = new ShaderPass(PastelVibrantShader);
     pastelPass.uniforms.saturation.value = 1.2; // Higher for more vibrant colors
-    pastelPass.uniforms.brightness.value = 0.8; // Slight brightness boost
-    pastelPass.uniforms.pastelAmount.value = 1.4; // Adjust for more/less pastel effect
-    pastelPass.uniforms.warmth.value = 0.05; // Subtle warm tint
+    pastelPass.uniforms.brightness.value = 1; // Slight brightness boost
+    pastelPass.uniforms.pastelAmount.value = 1; // Adjust for more/less pastel effect
+    pastelPass.uniforms.warmth.value = 0.1; // Subtle warm tint
     pastelPass.uniforms.opacity.value = 0.0; // Start fully transparent
     pastelPassRef.current = pastelPass;
 

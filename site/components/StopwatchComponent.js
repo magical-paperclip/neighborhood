@@ -21,6 +21,7 @@ const StopwatchComponent = ({ onClose, onAddProject, isExiting, userData }) => {
       stopTime: "10:30 AM",
       duration: "01:30",
       status: "A",
+      projectName: "Website Redesign",
       video:
         "https://hc-cdn.hel1.your-objectstorage.com/s/v3/986c1b1330a7f44984447ce85c170019febf5438_2025-04-23_18-35-01.mp4",
     },
@@ -30,6 +31,7 @@ const StopwatchComponent = ({ onClose, onAddProject, isExiting, userData }) => {
       stopTime: "12:45 PM",
       duration: "01:45",
       status: "S",
+      projectName: "Website Redesign",
       video: null,
     },
     {
@@ -38,6 +40,7 @@ const StopwatchComponent = ({ onClose, onAddProject, isExiting, userData }) => {
       stopTime: "03:30 PM",
       duration: "01:30",
       status: "P",
+      projectName: "Mobile App",
       video: null,
     },
     {
@@ -46,6 +49,7 @@ const StopwatchComponent = ({ onClose, onAddProject, isExiting, userData }) => {
       stopTime: "05:45 PM",
       duration: "01:45",
       status: "A",
+      projectName: "Website Redesign",
       video: null,
     },
     {
@@ -54,6 +58,7 @@ const StopwatchComponent = ({ onClose, onAddProject, isExiting, userData }) => {
       stopTime: "07:30 PM",
       duration: "01:30",
       status: "S",
+      projectName: "Mobile App",
       video: null,
     },
     {
@@ -62,6 +67,7 @@ const StopwatchComponent = ({ onClose, onAddProject, isExiting, userData }) => {
       stopTime: "09:15 PM",
       duration: "01:15",
       status: "P",
+      projectName: "Dashboard",
       video: null,
     },
     {
@@ -70,6 +76,7 @@ const StopwatchComponent = ({ onClose, onAddProject, isExiting, userData }) => {
       stopTime: "10:45 PM",
       duration: "01:15",
       status: "A",
+      projectName: "Mobile App",
       video: null,
     },
     {
@@ -78,6 +85,7 @@ const StopwatchComponent = ({ onClose, onAddProject, isExiting, userData }) => {
       stopTime: "12:15 AM",
       duration: "01:15",
       status: "S",
+      projectName: "Dashboard",
       video: null,
     },
   ];
@@ -466,11 +474,12 @@ const StopwatchComponent = ({ onClose, onAddProject, isExiting, userData }) => {
           }}
         >
           <colgroup>
-            <col style={{ width: "45%" }} />
-            <col style={{ width: "13%" }} />
-            <col style={{ width: "13%" }} />
-            <col style={{ width: "13%" }} />
-            <col style={{ width: "8%" }} />
+            <col style={{ width: "35%" }} />
+            <col style={{ width: "10%" }} />
+            <col style={{ width: "10%" }} />
+            <col style={{ width: "10%" }} />
+            <col style={{ width: "7%" }} />
+            <col style={{ width: "20%" }} />
             <col style={{ width: "8%" }} />
           </colgroup>
           <thead>
@@ -563,6 +572,21 @@ const StopwatchComponent = ({ onClose, onAddProject, isExiting, userData }) => {
                   letterSpacing: "0.5px",
                 }}
               >
+                Project Name
+              </th>
+              <th
+                style={{
+                  padding: "6px 8px",
+                  color: "#ef758a",
+                  fontWeight: 700,
+                  fontSize: 11,
+                  borderBottom: "1px solid #ef758a",
+                  textAlign: "left",
+                  textTransform: "uppercase",
+                  background: "transparent",
+                  letterSpacing: "0.5px",
+                }}
+              >
                 Video
               </th>
             </tr>
@@ -631,6 +655,17 @@ const StopwatchComponent = ({ onClose, onAddProject, isExiting, userData }) => {
                   >
                     {entry.status}
                   </span>
+                </td>
+                <td
+                  style={{
+                    padding: "6px 8px",
+                    color: "#000",
+                    fontSize: 13,
+                    borderBottom: "1px solid #ef758a",
+                    background: "transparent",
+                  }}
+                >
+                  {entry.projectName}
                 </td>
                 <td
                   style={{
