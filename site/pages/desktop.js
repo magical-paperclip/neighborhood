@@ -116,6 +116,7 @@ export default function Home() {
         <HackTimeComponent 
           isExiting={isExiting}
           onClose={handleCloseComponent}
+          userData={userData}
         />
       }
 

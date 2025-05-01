@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import HackTimeSelectionShader from './HackTimeSelectionShader';
 import StopwatchComponent from './StopwatchComponent';
+import { getToken } from '@/utils/storage';
 
-const HackTimeComponent = ({ isExiting, onClose }) => {
+const HackTimeComponent = ({ isExiting, onClose, userData }) => {
   const [timeTrackingMethod, setTimeTrackingMethod] = useState(''); // Default to stopwatch
   const [projects, setProjects] = useState([]);
+  const [checkedProjects, setCheckedProjects] = useState([]);  // Array of project names that are checked
   const [openedProjects, setOpenedProjects] = useState([]);
   const [projectSessions, setProjectSessions] = useState({});
-  const [selectedProjects, setSelectedProjects] = useState([]);
   const [selectedSessions, setSelectedSessions] = useState({});
   const [openedDays, setOpenedDays] = useState({});
   const [selectedDays, setSelectedDays] = useState({});
@@ -21,6 +22,170 @@ const HackTimeComponent = ({ isExiting, onClose }) => {
   const [sessionCommitMatches, setSessionCommitMatches] = useState({}); // Store matches between sessions and commits
   const [isLoadingCommits, setIsLoadingCommits] = useState({}); // Track loading state per project
   const [commitFetchErrors, setCommitFetchErrors] = useState({}); // Track fetch errors per project
+
+  // Add debounce helper at the top level of the component
+  const debounce = (func, wait) => {
+    let timeout;
+    return function executedFunction(...args) {
+      const later = () => {
+        clearTimeout(timeout);
+        func(...args);
+      };
+      clearTimeout(timeout);
+      timeout = setTimeout(later, wait);
+    };
+  };
+
+  // Add a ref to track ongoing requests
+  const [isUpdatingCommits, setIsUpdatingCommits] = useState({});
+
+  const fetchHackatimeData = async () => {
+    try {
+      console.log('Starting fetchHackatimeData');
+      const token = getToken();
+      if (!token) {
+        console.error('No token found');
+        return;
+      }
+
+      if (!userData?.slackId) {
+        console.error('No Slack ID found in user data');
+        return;
+      }
+
+      const response = await fetch(`/api/hackatime?userId=${userData.slackId}&token=${token}`);
+      if (!response.ok) {
+        throw new Error(`API responded with status: ${response.status}`);
+      }
+      const data = await response.json();
+      console.log('Hackatime API response:', data.data.projects);
+      
+      setProjects(data.data.projects);
+      
+      // Update checked projects from API response
+      const checked = data.data.projects
+        .filter(project => project.isChecked)
+        .map(project => project.name);
+      setCheckedProjects(checked);
+      
+      // Create a new object to hold all commit data
+      const newCommitData = {};
+      
+      // Process projects with GitHub links
+      for (const project of data.data.projects) {
+        console.log('Processing project:', project.name, 'GitHub link:', project.githubLink);
+        if (project.githubLink) {
+          console.log('Found GitHub link for project:', project.name);
+          
+          // Update GitHub links state
+          setGithubLinks(prev => ({
+            ...prev,
+            [project.name]: project.githubLink
+          }));
+
+          // Set loading state
+          setIsLoadingCommits(prev => ({
+            ...prev,
+            [project.name]: true
+          }));
+
+          try {
+            const match = project.githubLink.match(/github\.com\/([^\/]+\/[^\/]+)/);
+            if (!match) {
+              throw new Error('Invalid GitHub URL format');
+            }
+            const repoPath = match[1];
+            console.log('Fetching commits for:', project.name, 'repo path:', repoPath);
+            
+            const commits = await fetchGithubCommits(repoPath);
+            console.log('Fetched commits for:', project.name, 'count:', commits.length);
+            
+            // Store commits in our new object
+            newCommitData[project.name] = commits;
+
+            // If project is checked, update commits in Airtable
+            if (checked.includes(project.name)) {
+              await updateCommitsInAirtable(project.name, commits);
+            }
+            
+          } catch (error) {
+            console.error(`Error fetching commits for ${project.name}:`, error);
+            setCommitFetchErrors(prev => ({
+              ...prev,
+              [project.name]: error.message
+            }));
+          } finally {
+            setIsLoadingCommits(prev => ({
+              ...prev,
+              [project.name]: false
+            }));
+          }
+        }
+      }
+
+      // Update commit data state once with all commits
+      console.log('Setting all commit data:', newCommitData);
+      setCommitData(prev => ({
+        ...prev,
+        ...newCommitData
+      }));
+
+      // Fetch sessions for all projects
+      const startDate = new Date(2025, 0, 1);
+      const formattedDate = startDate.toISOString().split('T')[0];
+      
+      const projectSessionsPromises = data.data.projects.map(async (project) => {
+        try {
+          const response = await fetch(
+            `/api/hackatime/sessions?userId=${userData.slackId}&startDate=${formattedDate}&project=${encodeURIComponent(project.name)}`
+          );
+          const sessionData = await response.json();
+          return { projectName: project.name, sessions: sessionData.spans };
+        } catch (error) {
+          console.error(`Error fetching sessions for project ${project.name}:`, error);
+          return { projectName: project.name, sessions: [] };
+        }
+      });
+
+      const projectSessionsResults = await Promise.all(projectSessionsPromises);
+      const newProjectSessions = {};
+      
+      // Process each project's sessions
+      for (const result of projectSessionsResults) {
+        newProjectSessions[result.projectName] = result.sessions;
+        
+        // If project is checked and has commits, update sessions in Airtable
+        if (checked.includes(result.projectName) && newCommitData[result.projectName]) {
+          // Group sessions by commit first
+          const grouped = groupSessionsByCommit(result.sessions, result.projectName);
+          
+          // Create session-commit matches based on the grouping
+          const matches = {};
+          Object.entries(grouped).forEach(([commitSha, group]) => {
+            if (commitSha !== 'uncommitted' && commitSha !== 'unmatched') {
+              group.sessions.forEach(session => {
+                matches[session.start_time] = group.commit;
+              });
+            }
+          });
+          
+          // Update sessionCommitMatches state
+          setSessionCommitMatches(prev => ({
+            ...prev,
+            [result.projectName]: matches
+          }));
+          
+          // Update sessions in Airtable with the commit matches
+          await updateSessionsInAirtable(result.projectName, result.sessions);
+        }
+      }
+      
+      setProjectSessions(newProjectSessions);
+
+    } catch (error) {
+      console.error('Error in fetchHackatimeData:', error);
+    }
+  };
 
   const fetchProjectSessions = async (projectName) => {
     try {
@@ -60,27 +225,71 @@ const HackTimeComponent = ({ isExiting, onClose }) => {
   // Helper to get all session times for a commit group
   const getCommitSessionTimes = (commitGroup) => commitGroup.sessions.map(s => s.start_time);
 
-  // Project-level select/deselect all
-  const handleProjectSelect = (projectName) => {
-    const allSessionTimes = getAllSessionTimes(projectName);
-    const selectedSet = new Set(selectedSessions[projectName] || []);
-    const allSelected = allSessionTimes.length > 0 && allSessionTimes.every(time => selectedSet.has(time));
+  const handleProjectSelect = async (projectName) => {
+    const token = getToken();
+    if (!token) {
+      console.error('No token found');
+      return;
+    }
 
-    if (allSelected) {
-      // Deselect all
-      setSelectedSessions(prev => ({
-        ...prev,
-        [projectName]: []
-      }));
-      setSelectedProjects(prev => prev.filter(name => name !== projectName));
-      setSelectedDays(prev => ({ ...prev, [projectName]: [] }));
-    } else {
-      // Select all (replace, do not append)
-      setSelectedSessions(prev => ({
-        ...prev,
-        [projectName]: [...allSessionTimes]
-      }));
-      setSelectedProjects(prev => [...new Set([...prev, projectName])]);
+    const isCurrentlyChecked = checkedProjects.includes(projectName);
+
+    try {
+      if (!isCurrentlyChecked) {
+        // Add project
+        const response = await fetch('/api/addProject', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            token,
+            projectName,
+            githubLink: githubLinks[projectName] || ''
+          })
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to add project');
+        }
+
+        // Update local state immediately
+        setCheckedProjects(prev => [...prev, projectName]);
+
+        // If project has commits, update them in Airtable
+        if (commitData[projectName]) {
+          await updateCommitsInAirtable(projectName, commitData[projectName]);
+        }
+
+        // Update sessions in Airtable
+        if (projectSessions[projectName]) {
+          await updateSessionsInAirtable(projectName, projectSessions[projectName]);
+        }
+
+      } else {
+        // Remove project
+        const response = await fetch('/api/removeProject', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            token,
+            projectName
+          })
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to remove project');
+        }
+
+        // Update local state immediately
+        setCheckedProjects(prev => prev.filter(name => name !== projectName));
+      }
+    } catch (error) {
+      console.error('Error updating project:', error);
+      // Refresh data to ensure correct state
+      fetchHackatimeData();
     }
   };
 
@@ -178,16 +387,25 @@ const HackTimeComponent = ({ isExiting, onClose }) => {
     setShowGithubInput(true);
   };
 
+  // Modify the commit fetching logic to ensure unique SHAs
   const fetchGithubCommits = async (repoPath) => {
+    console.log('fetchGithubCommits called for:', repoPath);
     try {
-      console.log(`Fetching commits for ${repoPath}...`);
       let allCommits = [];
       let page = 1;
       let hasMore = true;
+      const seenShas = new Set(); // Track unique SHAs
 
       while (hasMore) {
+        console.log(`Fetching page ${page} of commits for ${repoPath}`);
         const response = await fetch(
-          `https://api.github.com/repos/${repoPath}/commits?author=SerenityUX&per_page=100&page=${page}`
+          `https://api.github.com/repos/${repoPath}/commits?author=SerenityUX&per_page=100&page=${page}`,
+          {
+            headers: {
+              'Authorization': `Bearer ${process.env.NEXT_PUBLIC_GITHUB_TOKEN}`,
+              'Accept': 'application/vnd.github.v3+json'
+            }
+          }
         );
         
         if (!response.ok) {
@@ -197,34 +415,32 @@ const HackTimeComponent = ({ isExiting, onClose }) => {
         }
 
         const commits = await response.json();
-        console.log(`Fetched ${commits.length} commits for ${repoPath} on page ${page}`);
+        console.log(`Received ${commits.length} commits for ${repoPath} on page ${page}`);
         
-        // Filter out merge commits and add to all commits
-        const filteredCommits = commits
-          .filter(commit => !commit.commit.message.toLowerCase().includes('merge'))
-          .map(commit => ({
-            sha: commit.sha,
-            message: commit.commit.message,
-            date: new Date(commit.commit.author.date),
-            url: commit.html_url
-          }));
-
-        allCommits = [...allCommits, ...filteredCommits];
+        // Filter out merge commits and duplicates
+        for (const commit of commits) {
+          const sha = commit.sha.trim();
+          if (!commit.commit.message.toLowerCase().includes('merge') && !seenShas.has(sha)) {
+            seenShas.add(sha);
+            allCommits.push({
+              sha,
+              message: commit.commit.message,
+              date: new Date(commit.commit.author.date),
+              url: commit.html_url
+            });
+          }
+        }
         
         // Check if we've reached the end
         hasMore = commits.length === 100;
         page++;
       }
 
-      console.log(`Total commits fetched: ${allCommits.length}`);
+      console.log(`Total unique commits fetched for ${repoPath}:`, allCommits.length);
       return allCommits;
     } catch (error) {
-      console.error('Error fetching GitHub commits:', error);
-      setCommitFetchErrors(prev => ({
-        ...prev,
-        [repoPath]: error.message
-      }));
-      return [];
+      console.error('Error in fetchGithubCommits:', error);
+      throw error;
     }
   };
 
@@ -257,12 +473,33 @@ const HackTimeComponent = ({ isExiting, onClose }) => {
     const githubLink = input.value.trim();
     
     if (githubLink) {
-      const match = githubLink.match(/github\.com\/([^\/]+\/[^\/]+)/);
-      if (match) {
-        const repoPath = match[1];
+      const token = getToken();
+      if (!token) {
+        console.error('No token found');
+        return;
+      }
+
+      try {
+        const response = await fetch('/api/connectGithub', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            token,
+            projectName: currentProjectForGithub,
+            githubLink: githubLink
+          })
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to connect GitHub repo');
+        }
+
+        // Update local state
         setGithubLinks(prev => ({
           ...prev,
-          [currentProjectForGithub]: repoPath
+          [currentProjectForGithub]: githubLink
         }));
 
         // Set loading state
@@ -272,6 +509,13 @@ const HackTimeComponent = ({ isExiting, onClose }) => {
         }));
 
         try {
+          // Extract repo path from the full URL
+          const match = githubLink.match(/github\.com\/([^\/]+\/[^\/]+)/);
+          if (!match) {
+            throw new Error('Invalid GitHub URL format');
+          }
+          const repoPath = match[1];
+
           // Fetch commits for this repository
           const commits = await fetchGithubCommits(repoPath);
           setCommitData(prev => ({
@@ -287,6 +531,12 @@ const HackTimeComponent = ({ isExiting, onClose }) => {
               currentProjectForGithub
             );
           }
+        } catch (error) {
+          console.error('Error fetching commits:', error);
+          setCommitFetchErrors(prev => ({
+            ...prev,
+            [currentProjectForGithub]: error.message
+          }));
         } finally {
           // Clear loading state
           setIsLoadingCommits(prev => ({
@@ -294,6 +544,8 @@ const HackTimeComponent = ({ isExiting, onClose }) => {
             [currentProjectForGithub]: false
           }));
         }
+      } catch (error) {
+        console.error('Error connecting GitHub:', error);
       }
     }
     
@@ -302,39 +554,7 @@ const HackTimeComponent = ({ isExiting, onClose }) => {
   };
 
   useEffect(() => {
-    const fetchHackatimeData = async () => {
-      try {
-        const response = await fetch('https://hackatime.hackclub.com/api/v1/users/U041FQB8VK2/stats?features=projects');
-        const data = await response.json();
-        setProjects(data.data.projects);
-        
-        // Fetch sessions for all projects
-        const startDate = new Date(2025, 0, 1);
-        const formattedDate = startDate.toISOString().split('T')[0];
-        
-        const projectSessionsPromises = data.data.projects.map(async (project) => {
-          try {
-            const response = await fetch(
-              `https://hackatime.hackclub.com/api/v1/users/U041FQB8VK2/heartbeats/spans?start_date=${formattedDate}&project=${encodeURIComponent(project.name)}`
-            );
-            const data = await response.json();
-            return { projectName: project.name, sessions: data.spans };
-          } catch (error) {
-            console.error(`Error fetching sessions for project ${project.name}:`, error);
-            return { projectName: project.name, sessions: [] };
-          }
-        });
-
-        const projectSessionsResults = await Promise.all(projectSessionsPromises);
-        const newProjectSessions = {};
-        projectSessionsResults.forEach(result => {
-          newProjectSessions[result.projectName] = result.sessions;
-        });
-        setProjectSessions(newProjectSessions);
-      } catch (error) {
-        console.error('Error fetching Hackatime data:', error);
-      }
-    };
+    console.log('Component mounted, fetching data...');
     fetchHackatimeData();
   }, []);
 
@@ -479,9 +699,8 @@ const HackTimeComponent = ({ isExiting, onClose }) => {
 
   // Checkbox checked logic
   const isProjectChecked = (projectName) => {
-    const allSessionTimes = getAllSessionTimes(projectName);
-    const selected = selectedSessions[projectName] || [];
-    return allSessionTimes.length > 0 && selected.length === allSessionTimes.length;
+    const project = projects.find(p => p.name === projectName);
+    return project?.isChecked || false;
   };
 
   const isCommitChecked = (projectName, commitGroup) => {
@@ -495,21 +714,43 @@ const HackTimeComponent = ({ isExiting, onClose }) => {
     const totalDuration = getTotalDuration(sessions);
     const isUnmatched = !commit && !isUncommitted;
     const commitSha = commit?.sha || (isUncommitted ? 'uncommitted' : 'unmatched');
-    const isSelected = selectedSessions[projectName]?.some(sessionTime => 
-      sessions.some(s => s.start_time === sessionTime)
-    );
+    const isProjectChecked = checkedProjects.includes(projectName);
     
     return (
       <div key={commitSha}>
         <div style={{ display: 'flex', alignItems: 'center', marginBottom: '4px' }}>
-          {!isUncommitted && (
-            <div style={{ marginRight: '12px' }}>
-              <input
-                type="checkbox"
-                checked={isSelected}
-                onChange={() => handleCommitSelect(projectName, commitSha, commitGroup)}
-              />
+          {!isUncommitted && isProjectChecked && (
+            <div style={{ 
+              marginRight: '12px',
+              width: '16px',
+              height: '16px',
+              position: 'relative',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}>
+              <div style={{
+                width: '16px',
+                height: '16px',
+                backgroundColor: '#A4D4A2',
+                borderRadius: '3px',
+                border: "1px solid #007C74",
+                position: 'absolute',
+                pointerEvents: 'none'
+              }} />
+              <div style={{
+                width: '10px',
+                height: '10px',
+                position: 'relative',
+                zIndex: 1,
+                pointerEvents: 'none'
+              }}>
+
+              </div>
             </div>
+          )}
+          {!isUncommitted && !isProjectChecked && (
+            <div style={{ width: '16px', marginRight: '12px' }} />
           )}
           <div style={{ flex: 1 }}>
             {isUncommitted ? (
@@ -589,6 +830,7 @@ const HackTimeComponent = ({ isExiting, onClose }) => {
     const commit = sessionCommitMatches[projectName]?.[session.start_time];
     const isLoading = isLoadingCommits[projectName];
     const error = commitFetchErrors[projectName];
+    const isProjectChecked = checkedProjects.includes(projectName);
 
     return (
       <div style={{ 
@@ -596,13 +838,18 @@ const HackTimeComponent = ({ isExiting, onClose }) => {
         alignItems: 'center',
         marginBottom: '8px'
       }}>
-        <div style={{ marginRight: '12px' }}>
-          <input 
-            type="checkbox" 
-            checked={selectedSessions[projectName]?.includes(session.start_time) || false}
-            onChange={() => handleSessionSelect(projectName, session.start_time)}
-          />
-        </div>
+        {isProjectChecked ? (
+          <div style={{ marginRight: '12px' }}>
+            <input 
+              type="checkbox" 
+              checked={true}
+              disabled={true}
+              style={{ opacity: 0.7 }}
+            />
+          </div>
+        ) : (
+          <div style={{ width: '12px', marginRight: '12px' }} />
+        )}
         <div style={{ 
           display: 'flex',
           alignItems: 'center',
@@ -654,6 +901,96 @@ const HackTimeComponent = ({ isExiting, onClose }) => {
       </div>
     );
   };
+
+  // Modify the updateCommitsInAirtable function to use debouncing and prevent duplicate requests
+  const updateCommitsInAirtable = debounce(async (projectName, commits) => {
+    // Check if already updating this project
+    if (isUpdatingCommits[projectName]) {
+      console.log('Already updating commits for:', projectName);
+      return;
+    }
+
+    const token = getToken();
+    if (!token) {
+      console.error('No token found');
+      return;
+    }
+
+    try {
+      setIsUpdatingCommits(prev => ({ ...prev, [projectName]: true }));
+      
+      console.log('Updating commits for project:', projectName);
+      const response = await fetch('/api/updateCommits', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          token,
+          projectName,
+          commits: commits.map(commit => ({
+            ...commit,
+            sha: commit.sha.trim() // Ensure no whitespace in SHA
+          }))
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update commits');
+      }
+
+      const result = await response.json();
+      console.log('Commits update result:', result);
+    } catch (error) {
+      console.error('Error updating commits:', error);
+    } finally {
+      setIsUpdatingCommits(prev => ({ ...prev, [projectName]: false }));
+    }
+  }, 1000); // 1 second debounce
+
+  // Add updateSessionsInAirtable function
+  const updateSessionsInAirtable = debounce(async (projectName, sessions) => {
+    // Check if already updating this project
+    if (isUpdatingCommits[projectName]) {
+      console.log('Already updating sessions for:', projectName);
+      return;
+    }
+
+    const token = getToken();
+    if (!token) {
+      console.error('No token found');
+      return;
+    }
+
+    try {
+      setIsUpdatingCommits(prev => ({ ...prev, [projectName]: true }));
+      
+      console.log('Updating sessions for project:', projectName);
+      const response = await fetch('/api/updateSessions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          token,
+          projectName,
+          sessions,
+          sessionCommitMatches: sessionCommitMatches[projectName] || {}
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update sessions');
+      }
+
+      const result = await response.json();
+      console.log('Sessions update result:', result);
+    } catch (error) {
+      console.error('Error updating sessions:', error);
+    } finally {
+      setIsUpdatingCommits(prev => ({ ...prev, [projectName]: false }));
+    }
+  }, 1000);
 
   return (
     <div className={`pop-in ${isExiting ? "hidden" : ""}`} 
@@ -909,7 +1246,7 @@ const HackTimeComponent = ({ isExiting, onClose }) => {
 
 
           {projects.map((project) => {
-            const projectChecked = isProjectChecked(project.name);
+            const isChecked = checkedProjects.includes(project.name);
             const grouped = groupSessionsByCommit(projectSessions[project.name] || [], project.name);
             const dayKeys = Object.keys(grouped).sort((a, b) => b.localeCompare(a)); // newest first
             // Project total duration
@@ -925,7 +1262,7 @@ const HackTimeComponent = ({ isExiting, onClose }) => {
                   <div style={{ marginRight: '12px' }}>
                     <input 
                       type="checkbox" 
-                      checked={projectChecked}
+                      checked={isChecked}
                       onChange={() => handleProjectSelect(project.name)}
                     />
                   </div>

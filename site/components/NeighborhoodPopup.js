@@ -12,12 +12,15 @@ export default function NeighborhoodPopup({ onClose }) {
   return (
     <div className="popup-overlay">
       <div className="popup-content">
-        <audio ref={audioRef} src="/banjo.mp3" />
-        <h2>Exploration isn't open yet!</h2>
-        <p>We will open the Neighborhood server after our kickoff call at 7:30 PM EST on May 9th! From that launch on, you'll be able to explore the Neighborhood with other Hack Clubbers.</p>
-        <button onClick={onClose} className="close-button">
-          alrighty!
-        </button>
+        <div className="shader-background" />
+        <div className="content-wrapper">
+          <audio ref={audioRef} src="/banjo.mp3" />
+          <h2>Exploration isn't open yet!</h2>
+          <p>We will open the Neighborhood server after our kickoff call at 7:30 PM EST on May 9th! From that launch on, you'll be able to explore the Neighborhood with other Hack Clubbers.</p>
+          <button onClick={onClose} className="close-button">
+            alrighty!
+          </button>
+        </div>
       </div>
       <style jsx>{`
         .popup-overlay {
@@ -35,6 +38,7 @@ export default function NeighborhoodPopup({ onClose }) {
         }
 
         .popup-content {
+          position: relative;
           background-color: #007C74;
           padding: 2rem;
           border-radius: 8px;
@@ -42,6 +46,49 @@ export default function NeighborhoodPopup({ onClose }) {
           color: #FFF9E6;
           font-family: "M PLUS Rounded 1c";
           animation: slideIn 0.3s ease-out;
+          overflow: hidden;
+        }
+
+        .shader-background {
+          position: absolute;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background: linear-gradient(
+            45deg,
+            #fff 25%,
+            transparent 25%,
+            transparent 75%,
+            #fff 75%
+          );
+          background-size: 20px 400px;
+          opacity: 0.1;
+          animation: wave 10s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+        }
+
+        .shader-background:before {
+          content: '';
+          position: absolute;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background: linear-gradient(
+            -45deg,
+            #68B893 25%,
+            transparent 25%,
+            transparent 75%,
+            #68B893 75%
+          );
+          background-size: 20px 400px;
+          opacity: 0.1;
+          animation: wave 10s cubic-bezier(0.4, 0, 0.2, 1) infinite reverse;
+        }
+
+        .content-wrapper {
+          position: relative;
+          z-index: 1;
         }
 
         .popup-content h2 {
@@ -79,6 +126,18 @@ export default function NeighborhoodPopup({ onClose }) {
         @keyframes slideIn {
           from { transform: translateY(-20px); opacity: 0; }
           to { transform: translateY(0); opacity: 1; }
+        }
+
+        @keyframes wave {
+          0% {
+            background-position: 0 0;
+          }
+          50% {
+            background-position: 20px 200px;
+          }
+          100% {
+            background-position: 0 0;
+          }
         }
       `}</style>
     </div>
