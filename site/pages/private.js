@@ -325,7 +325,7 @@ export default function Home() {
                       width: "100%"
                     }}
                   >
-                   {isSubmitting ? 'Joining...' : 'Join Us in San Francisco'}
+                   {isSubmitting ? 'Joining...' : 'Join Us In San Francisco'}
                   </button>
                   {error && (
                     <p style={{
