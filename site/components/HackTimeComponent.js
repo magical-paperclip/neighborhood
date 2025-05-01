@@ -30,6 +30,7 @@ const HackTimeComponent = ({ isExiting, onClose, userData }) => {
   const [playedMelodies, setPlayedMelodies] = useState(new Set());
   const [stopwatchView, setStopwatchView] = useState("stopwatch"); // Default to "stopwatch"
   const [isStopwatchExiting, setIsStopwatchExiting] = useState(false);
+  const [isStopwatchHurt, setIsStopwatchHurt] = useState(false);
 
   // Add debounce helper at the top level of the component
   const debounce = (func, wait) => {
@@ -1393,6 +1394,55 @@ const HackTimeComponent = ({ isExiting, onClose, userData }) => {
     }
   }, 1000);
 
+  const bounceKeyframes = `
+    @keyframes gentleBounce {
+      0%, 100% {
+        transform: translateY(0) rotate(0deg);
+      }
+      25% {
+        transform: translateY(-6px) rotate(-2deg);
+      }
+      75% {
+        transform: translateY(-6px) rotate(2deg);
+      }
+    }
+
+    @keyframes fadeInScale {
+      0% {
+        opacity: 0;
+        transform: translate(-50%, -10px) scale(0.95);
+      }
+      100% {
+        opacity: 1;
+        transform: translate(-50%, 0) scale(1);
+      }
+    }
+
+    @keyframes alertPulse {
+      0%, 100% {
+        background-color: #786A50;
+      }
+      50% {
+        background-color: #FF7C68;
+      }
+    }
+
+    @keyframes hurtShake {
+      0%, 100% {
+        transform: translateX(0);
+        background-color: #fff9e5;
+      }
+      10%, 30%, 50%, 70%, 90% {
+        transform: translateX(-5px);
+        background-color: #ffebee;
+      }
+      20%, 40%, 60%, 80% {
+        transform: translateX(5px);
+        background-color: #ffebee;
+      }
+    }
+  `;
+
   return (
     <div
       className={`pop-in ${isExiting ? "hidden" : ""}`}
@@ -1608,6 +1658,7 @@ const HackTimeComponent = ({ isExiting, onClose, userData }) => {
                             activeCard === "hackatime"
                           ? "scale(0.96)"
                           : "none",
+                  animation: isStopwatchHurt ? "hurtShake 0.5s ease-in-out" : "none"
                 }}
                 onMouseEnter={() => setHoveredCard("stopwatch")}
                 onMouseLeave={() => {
@@ -1619,7 +1670,10 @@ const HackTimeComponent = ({ isExiting, onClose, userData }) => {
                 onClick={() => {
                   const audio = new Audio("/stopwatchTapped.wav");
                   audio.play();
-                  setTimeTrackingMethod("stopwatch");
+                  setIsStopwatchHurt(true);
+                  setTimeout(() => {
+                    setIsStopwatchHurt(false);
+                  }, 500);
                 }}
               >
                 {hoveredCard === "stopwatch" && (
@@ -1657,6 +1711,9 @@ const HackTimeComponent = ({ isExiting, onClose, userData }) => {
                   Simply click start, start doing whatever design or code for
                   your project, and then press stop to end the ticking.{" "}
                   <b>Warning 20hr max </b>
+                  <br/>
+                  <br/>
+                  <b>will activate in 3 days</b>
                 </p>
               </div>
             </div>
