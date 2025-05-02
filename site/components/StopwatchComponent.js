@@ -380,6 +380,7 @@ const StopwatchComponent = ({ onClose, onAddProject, isExiting, userData }) => {
       );
     }
   };
+  const [isUploading, setIsUploading] = useState(false);
 
   const handleFinishStretch = async () => {
     if (!commitMessage.trim() && !commitVideo) {
@@ -387,40 +388,53 @@ const StopwatchComponent = ({ onClose, onAddProject, isExiting, userData }) => {
       return;
     }
 
+    // Prevent multiple submissions
+    if (isUploading) {
+      return;
+    }
+
     try {
+      setIsUploading(true);
+
       // Handle video upload if a file is selected
       let videoUrl = null;
       if (commitVideo) {
-        const formData = new FormData();
-        formData.append("video", commitVideo);
-        formData.append("sessionId", userData?.slackId || "anonymous");
+        // Get pre-signed URL from our API
+        const getUrlResponse = await fetch("/api/getSignedUrl", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            contentType: commitVideo.type,
+            filename: commitVideo.name,
+          }),
+        });
 
-        console.log("Uploading video:", commitVideo.name);
-
-        try {
-          const response = await fetch("/api/uploadVideo", {
-            method: "POST",
-            body: formData,
-          });
-
-          console.log("Upload response status:", response.status);
-
-          if (!response.ok) {
-            const errorText = await response.text();
-            console.error("Upload error:", errorText);
-            throw new Error(`Video upload failed: ${errorText}`);
-          }
-
-          const result = await response.json();
-          videoUrl = result.videoUrl;
-          console.log("Upload successful, URL:", videoUrl);
-        } catch (error) {
-          console.error("Error saving stretch:", error);
-          showAlert(
-            "There was an error saving your work. Please try again.",
-            "Error",
-          );
+        if (!getUrlResponse.ok) {
+          throw new Error("Failed to get upload URL");
         }
+
+        const { uploadUrl, fileUrl } = await getUrlResponse.json();
+
+        // Use the new CORS proxy to upload the file directly
+        const uploadResponse = await fetch(
+          `/api/proxy?url=${encodeURIComponent(uploadUrl)}`,
+          {
+            method: "PUT",
+            headers: {
+              "Content-Type": commitVideo.type,
+            },
+            body: commitVideo, // Send the actual file, not JSON
+          },
+        );
+
+        if (!uploadResponse.ok) {
+          throw new Error("Failed to upload video");
+        }
+
+        videoUrl = fileUrl;
+        console.log("Upload successful, URL:", videoUrl);
       }
 
       await fetch("/api/createSession", {
@@ -468,7 +482,12 @@ const StopwatchComponent = ({ onClose, onAddProject, isExiting, userData }) => {
       setShowModal(false);
     } catch (error) {
       console.error("Error saving stretch:", error);
-      alert("There was an error saving your work. Please try again.");
+      showAlert(
+        "There was an error saving your work. Please try again.",
+        "Error",
+      );
+    } finally {
+      setIsUploading(false);
     }
   };
 
@@ -1105,20 +1124,53 @@ const StopwatchComponent = ({ onClose, onAddProject, isExiting, userData }) => {
               </button>
               <button
                 onClick={handleFinishStretch}
+                disabled={isUploading}
                 style={{
                   padding: "8px 16px",
                   border: "none",
                   borderRadius: "4px",
-                  backgroundColor: "#ef758a",
+                  backgroundColor: isUploading ? "#cccccc" : "#ef758a",
                   color: "white",
-                  cursor: "pointer",
+                  cursor: isUploading ? "not-allowed" : "pointer",
                   fontSize: "14px",
                   fontWeight: "500",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
                 }}
               >
-                Save Stretch
+                {isUploading ? (
+                  <>
+                    <span
+                      className="loading-spinner"
+                      style={{
+                        display: "inline-block",
+                        width: "16px",
+                        height: "16px",
+                        border: "2px solid #ffffff",
+                        borderTopColor: "transparent",
+                        borderRadius: "50%",
+                        marginRight: "8px",
+                        animation: "spin 1s linear infinite",
+                      }}
+                    ></span>
+                    Uploading...
+                  </>
+                ) : (
+                  "Save Stretch"
+                )}
               </button>
             </div>
+            {isUploading ? (
+              <>
+                <p style={{ marginTop: 10 }}>
+                  This might freeze, please wait...
+                </p>
+                <p>Take this time to check the slack :D</p>
+              </>
+            ) : (
+              <></>
+            )}
           </div>
         </div>
       )}
@@ -1126,5 +1178,25 @@ const StopwatchComponent = ({ onClose, onAddProject, isExiting, userData }) => {
     </div>
   );
 };
+
+<style jsx global>{`
+  @keyframes spin {
+    0% {
+      transform: rotate(0deg);
+    }
+    100% {
+      transform: rotate(360deg);
+    }
+  }
+  .loading-spinner {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    border: 2px solid #ffffff;
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+  }
+`}</style>;
 
 export default StopwatchComponent;
