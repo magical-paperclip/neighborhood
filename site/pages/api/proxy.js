@@ -1,7 +1,9 @@
+// neighborhood/site/pages/api/proxy.js
+import { createReadStream } from "stream";
+import { Readable } from "stream";
 import fetch from "node-fetch";
 import { URL } from "url";
 
-// Allow different HTTP methods
 export default async function handler(req, res) {
   // Set CORS headers
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -41,39 +43,46 @@ export default async function handler(req, res) {
   }
 
   try {
-    // Prepare fetch options
-    const options = {
-      method: req.method,
-      headers: {},
-    };
-
-    // Forward necessary headers
-    const headersToForward = { ...req.headers };
-    // Remove headers that could cause issues
-    ["host", "connection", "content-length"].forEach((header) => {
-      delete headersToForward[header];
+    // Get raw request body as a buffer for binary data
+    const chunks = [];
+    await new Promise((resolve, reject) => {
+      req.on("data", (chunk) => chunks.push(chunk));
+      req.on("end", () => resolve());
+      req.on("error", (err) => reject(err));
     });
 
-    options.headers = headersToForward;
+    const bodyBuffer = Buffer.concat(chunks);
 
-    // Forward body for PUT/POST requests (needed for S3 upload)
-    if (["POST", "PUT"].includes(req.method) && req.body) {
-      if (typeof req.body === "string") {
-        options.body = req.body;
-      } else {
-        options.body = JSON.stringify(req.body);
+    // Prepare headers for the target request
+    const headers = {};
+
+    // Copy all headers from the original request except those that might cause issues
+    Object.keys(req.headers).forEach((key) => {
+      if (
+        !["host", "connection", "content-length", "transfer-encoding"].includes(
+          key.toLowerCase(),
+        )
+      ) {
+        headers[key] = req.headers[key];
       }
-    }
+    });
 
-    // Make the request to the target URL
-    const response = await fetch(targetUrl, options);
+    // Make request to target with the raw body
+    const fetchOptions = {
+      method: req.method,
+      headers: headers,
+      body:
+        req.method !== "GET" && req.method !== "HEAD" ? bodyBuffer : undefined,
+      redirect: "follow",
+    };
 
-    // Get response data
-    const data = await response.text();
+    const response = await fetch(targetUrl, fetchOptions);
 
-    // Forward response headers
-    Object.entries(response.headers.raw()).forEach(([key, value]) => {
-      // Skip problematic headers
+    // Forward status and headers from the response
+    res.statusCode = response.status;
+
+    for (const [key, value] of Object.entries(response.headers.raw())) {
+      // Skip headers that might cause issues
       if (
         !["content-encoding", "content-length", "transfer-encoding"].includes(
           key.toLowerCase(),
@@ -81,10 +90,11 @@ export default async function handler(req, res) {
       ) {
         res.setHeader(key, value);
       }
-    });
+    }
 
-    // Send response
-    return res.status(response.status).send(data);
+    // Get response data and send it back
+    const responseData = await response.buffer();
+    return res.send(responseData);
   } catch (err) {
     console.error("CORS Proxy Error:", err);
     return res.status(500).json({
@@ -96,8 +106,7 @@ export default async function handler(req, res) {
 
 export const config = {
   api: {
-    bodyParser: {
-      sizeLimit: "10000mb", // Adjust based on your upload needs
-    },
+    bodyParser: false, // Critical for handling binary data correctly
+    responseLimit: false, // No limit on response size
   },
 };

@@ -398,6 +398,30 @@ const StopwatchComponent = ({ onClose, onAddProject, isExiting, userData }) => {
 
       let videoUrl = null;
       if (commitVideo) {
+        // Sanitize filename before sending to API
+        const originalFilename = commitVideo.name;
+
+        // Create sanitized filename (lowercase)
+        let sanitizedFilename;
+        const lastDotIndex = originalFilename.lastIndexOf(".");
+
+        if (lastDotIndex === -1) {
+          // No extension
+          sanitizedFilename = originalFilename
+            .toLowerCase()
+            .replace(/[^a-z]/g, "");
+        } else {
+          // Has extension - preserve it
+          const extension = originalFilename
+            .substring(lastDotIndex)
+            .toLowerCase();
+          const baseName = originalFilename
+            .substring(0, lastDotIndex)
+            .toLowerCase()
+            .replace(/[^a-z]/g, "");
+          sanitizedFilename = (baseName || "file") + extension;
+        }
+
         // Get presigned URL from API
         const getUrlResponse = await fetch("/api/getSignedUrl", {
           method: "POST",
@@ -406,7 +430,7 @@ const StopwatchComponent = ({ onClose, onAddProject, isExiting, userData }) => {
           },
           body: JSON.stringify({
             contentType: commitVideo.type,
-            filename: commitVideo.name,
+            filename: sanitizedFilename, // Use sanitized filename
           }),
         });
 
@@ -435,7 +459,6 @@ const StopwatchComponent = ({ onClose, onAddProject, isExiting, userData }) => {
         videoUrl = fileUrl;
         console.log("Upload successful, URL:", videoUrl);
       }
-
       // Only proceed if the upload succeeded
       const sessionResponse = await fetch("/api/createSession", {
         method: "POST",
@@ -474,6 +497,13 @@ const StopwatchComponent = ({ onClose, onAddProject, isExiting, userData }) => {
       if (!commitResponse.ok) {
         throw new Error("Failed to create commit");
       }
+
+      // Close the modal and remove the commit message and every everything
+      setShowModal(false);
+      setCommitMessage("");
+      setCommitVideo(null);
+      setProjectName("");
+      setElapsedTime(0);
 
       // After successful commit, refresh the commits list
       const token = getToken();
