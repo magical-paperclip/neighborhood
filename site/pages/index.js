@@ -93,8 +93,8 @@ export default function Home() {
       
       // Only update fields that are present in the URL
       const newFormData = { ...formData };
-      if (name) newFormData.name = name;
-      if (email) newFormData.email = email;
+      if (name) newFormData.name = name.trim();
+      if (email) newFormData.email = email.trim();
       if (birthday) {
         // Convert ISO date format to YYYY-MM-DD if needed
         newFormData.birthday = birthday.includes('T') ? 
@@ -118,8 +118,8 @@ export default function Home() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          email: formData.email,
-          fullName: formData.name,
+          email: formData.email.trim(),
+          fullName: formData.name.trim(),
           birthday: formData.birthday
         }),
       });
@@ -152,7 +152,7 @@ export default function Home() {
       <Head>
         <title>Neighborhood</title>
         <meta name="description" content="somewhere new" />
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
         <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@400;700&display=swap" rel="stylesheet" />
       </Head>
       <div style={{
@@ -500,7 +500,7 @@ export default function Home() {
               <iframe
                 width="100%"
                 height="100%"
-                src="https://www.youtube.com/embed/P5eVmjHb6IQ?autoplay=1"
+                src="https://www.youtube.com/embed/On9yuhuU40E?autoplay=1"
                 title="Neighborhood Song"
                 frameBorder="0"
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
@@ -536,7 +536,7 @@ export default function Home() {
             <iframe
               width="100%"
               height="100%"
-              src="https://www.youtube.com/embed/4TbTySC-SBY?autoplay=1"
+              src="https://www.youtube.com/embed/ehH_52fzStw?autoplay=1"
               title="Neighborhood Song"
               frameBorder="0"
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
