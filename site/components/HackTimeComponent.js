@@ -1977,19 +1977,7 @@ const HackTimeComponent = ({ isExiting, onClose, userData }) => {
                   Hey, there <br />
                   <br />
                   It appears this is your first time using Hackatime and you
-                  have no projects set up yet. Head on over to{" "}
-                  <a
-                    href="http://hackatime.hackclub.com/"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    style={{
-                      color: "#ef758a",
-                      textDecoration: "none",
-                      fontWeight: "bold",
-                    }}
-                  >
-                    hackatime.hackclub.com
-                  </a>{" "}
+                  have no projects set up yet. Head on over to hackatime.hackclub.com
                   and they'll walk you through how to begin logging your time in
                   Hackatime directly in your IDE automagically.
                   <br />
