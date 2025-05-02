@@ -19,7 +19,7 @@ const s3Client = new S3Client({
   },
 });
 
-// Helper to parse multipart/form-data
+// Parse multipart/form-data
 const parseForm = (req) =>
   new Promise((resolve, reject) => {
     const form = formidable({ keepExtensions: true, multiples: false });
@@ -60,19 +60,19 @@ export default async function handler(req, res) {
     const fileBuffer = fs.readFileSync(videoFile.filepath);
     const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
     const filename = `${timestamp}_${sessionId}_${videoFile.originalFilename || "video.mp4"}`;
+    const s3Key = `omg-moments/${filename}`;
 
     const params = {
       Bucket: process.env.S3_BUCKET_NAME,
-      Key: `videos/${filename}`,
+      Key: s3Key,
       Body: fileBuffer,
       ContentType: fileType,
-      // ⛔️ No ACL — must rely on bucket policy for public access
     };
 
     await s3Client.send(new PutObjectCommand(params));
     fs.unlinkSync(videoFile.filepath);
 
-    const videoUrl = `https://${process.env.S3_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/videos/${filename}`;
+    const videoUrl = `https://${process.env.S3_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${s3Key}`;
 
     res.status(200).json({ success: true, videoUrl, sessionId });
   } catch (error) {
