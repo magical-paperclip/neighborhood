@@ -15,6 +15,159 @@ const StopwatchComponent = ({ onClose, onAddProject, isExiting, userData }) => {
   const [showModal, setShowModal] = useState(false);
   const [commitMessage, setCommitMessage] = useState("");
   const [commitVideo, setCommitVideo] = useState(null);
+  const [alertModal, setAlertModal] = useState({
+    show: false,
+    message: "",
+    title: "",
+    onConfirm: () => {},
+    onCancel: () => {},
+    isConfirm: false,
+  });
+
+  const CustomModal = () => {
+    if (!alertModal.show) return null;
+
+    const handleConfirm = () => {
+      const confirmCallback = alertModal.onConfirm;
+      setAlertModal((prev) => ({ ...prev, show: false }));
+      if (confirmCallback) confirmCallback();
+    };
+
+    const handleCancel = () => {
+      const cancelCallback = alertModal.onCancel;
+      setAlertModal((prev) => ({ ...prev, show: false }));
+      if (cancelCallback) cancelCallback();
+    };
+
+    // Handle backdrop click - only close if clicking outside modal content
+    const handleBackdropClick = (e) => {
+      if (e.target === e.currentTarget) {
+        handleCancel();
+      }
+    };
+
+    return (
+      <div
+        style={{
+          position: "fixed",
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: "rgba(0,0,0,0.5)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          zIndex: 1500,
+        }}
+        onClick={handleBackdropClick}
+      >
+        <div
+          style={{
+            backgroundColor: "white",
+            padding: "24px",
+            borderRadius: "8px",
+            width: "400px",
+            boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Rest of the modal content remains the same */}
+          <h3
+            style={{
+              margin: "0 0 8px 0",
+              color: "#ef758a",
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+            }}
+          >
+            <span style={{ fontSize: "20px" }}>
+              {alertModal.isConfirm ? "❓" : "ℹ️"}
+            </span>
+            {alertModal.title || "Notice"}
+          </h3>
+          <p
+            style={{
+              margin: "0 0 16px 0",
+              color: "#666",
+              fontSize: "14px",
+            }}
+          >
+            {alertModal.message}
+          </p>
+
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "flex-end",
+              gap: "8px",
+            }}
+          >
+            {alertModal.isConfirm && (
+              <button
+                type="button"
+                onClick={handleCancel}
+                style={{
+                  padding: "8px 16px",
+                  border: "1px solid #ddd",
+                  borderRadius: "4px",
+                  backgroundColor: "pink",
+                  color: "black",
+                  cursor: "pointer",
+                  fontSize: "14px",
+                }}
+              >
+                Cancel
+              </button>
+            )}
+            <button
+              onClick={handleConfirm}
+              style={{
+                padding: "8px 16px",
+                border: "none",
+                borderRadius: "4px",
+                backgroundColor: "#ef758a",
+                color: "white",
+                cursor: "pointer",
+                fontSize: "14px",
+                fontWeight: "500",
+              }}
+            >
+              {alertModal.isConfirm ? "Confirm" : "OK"}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const showAlert = (message, title = "Notice", onConfirm = () => {}) => {
+    setAlertModal({
+      show: true,
+      message,
+      title,
+      onConfirm,
+      onCancel: () => {},
+      isConfirm: false,
+    });
+  };
+
+  const showConfirm = (
+    message,
+    title = "Confirm",
+    onConfirm = () => {},
+    onCancel = () => {},
+  ) => {
+    setAlertModal({
+      show: true,
+      message,
+      title,
+      onConfirm,
+      onCancel,
+      isConfirm: true,
+    });
+  };
 
   useEffect(() => {
     let intervalId;
@@ -206,28 +359,31 @@ const StopwatchComponent = ({ onClose, onAddProject, isExiting, userData }) => {
       setStartTime(Date.now());
       setIsRunning(true);
     } else {
-      window.alert("Please select a project before starting the stopwatch");
+      showAlert("Please select a project before starting the stopwatch");
     }
   };
 
   const stopStopwatch = () => {
     if (isRunning) {
+      setIsRunning(false);
       const currentTime = formatTime(elapsedTime);
-      const shouldStop = window.confirm(
+      showConfirm(
         `Are you ready to end the time at ${currentTime}?`,
+        "Confirm End",
+        () => {
+          console.log(`Time elapsed: ${currentTime}`);
+          setShowModal(true);
+        },
+        () => {
+          setIsRunning(false);
+        },
       );
-
-      if (shouldStop) {
-        console.log(`Time elapsed: ${currentTime}`);
-        setIsRunning(false);
-        setShowModal(true);
-      }
     }
   };
 
   const handleFinishStretch = async () => {
     if (!commitMessage.trim() && !commitVideo) {
-      alert("Please enter a commit message before submitting");
+      showAlert("Please enter a commit message before submitting");
       return;
     }
 
@@ -259,8 +415,11 @@ const StopwatchComponent = ({ onClose, onAddProject, isExiting, userData }) => {
           videoUrl = result.videoUrl;
           console.log("Upload successful, URL:", videoUrl);
         } catch (error) {
-          console.error("Upload exception:", error);
-          throw error;
+          console.error("Error saving stretch:", error);
+          showAlert(
+            "There was an error saving your work. Please try again.",
+            "Error",
+          );
         }
       }
 
@@ -963,6 +1122,7 @@ const StopwatchComponent = ({ onClose, onAddProject, isExiting, userData }) => {
           </div>
         </div>
       )}
+      <CustomModal />
     </div>
   );
 };
