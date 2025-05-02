@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { getToken } from "@/utils/storage"; // Add this import
+import { getToken } from "@/utils/storage";
 
 const AddProjectComponent = ({
   onClose,
@@ -10,30 +10,89 @@ const AddProjectComponent = ({
   const [projectName, setProjectName] = useState("");
   const [githubLink, setGithubLink] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
+  const [isCheckingRepo, setIsCheckingRepo] = useState(false);
+
+  const validateGithubUrl = (url) => {
+    // Check if the URL matches a GitHub repository pattern
+    const githubPattern = /^https?:\/\/github\.com\/[^\/]+\/[^\/]+\/?$/;
+    return githubPattern.test(url);
+  };
+
+  const checkGithubRepo = async (url) => {
+    setIsCheckingRepo(true);
+    setErrorMessage("");
+
+    try {
+      // Extract owner and repo name from GitHub URL
+      const urlParts = url.replace(/\/$/, "").split("/");
+      const owner = urlParts[urlParts.length - 2];
+      const repo = urlParts[urlParts.length - 1];
+
+      // Call GitHub API to verify the repository exists and is accessible
+      const response = await fetch(
+        `https://api.github.com/repos/${owner}/${repo}`,
+      );
+
+      if (!response.ok) {
+        if (response.status === 404) {
+          setErrorMessage(
+            "GitHub repository not found or is private. Please check the URL.",
+          );
+          return false;
+        } else {
+          setErrorMessage(
+            "Could not verify GitHub repository. Please check the URL.",
+          );
+          return false;
+        }
+      }
+
+      return true;
+    } catch (error) {
+      setErrorMessage(
+        "Failed to validate GitHub repository. Please check your connection.",
+      );
+      return false;
+    } finally {
+      setIsCheckingRepo(false);
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setErrorMessage("");
 
     // Validate App Name
     if (!projectName.trim()) {
-      alert("Please enter a App Name");
+      setErrorMessage("Please enter an App Name");
       return;
     }
 
-    // Validate GitHub link if provided
-    if (githubLink.trim()) {
-      const pattern =
-        /(http|https):\/\/(\w+:{0,1}\w*@)?(\S+)(:[0-9]+)?(\/|\/([\w#!:.?+=&%@!\-\/]))?/;
-      if (!pattern.test(githubLink)) {
-        alert("Please enter a valid GitHub link");
-        return;
-      }
+    // Validate GitHub link
+    if (!githubLink.trim()) {
+      setErrorMessage("GitHub link is required");
+      return;
     }
 
-    // Get token using the same approach as StopwatchComponent
+    // Validate GitHub URL format
+    if (!validateGithubUrl(githubLink)) {
+      setErrorMessage(
+        "Please enter a valid GitHub repository URL (e.g., https://github.com/username/repo)",
+      );
+      return;
+    }
+
+    // Check if the GitHub repository exists
+    const isValidRepo = await checkGithubRepo(githubLink);
+    if (!isValidRepo) {
+      return;
+    }
+
+    // Get token
     const token = getToken();
     if (!token) {
-      alert("You need to be logged in to create a project");
+      setErrorMessage("You need to be logged in to create a project");
       return;
     }
 
@@ -46,7 +105,7 @@ const AddProjectComponent = ({
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          token: token, // Use the token from storage
+          token: token,
           projectName: projectName,
           githubLink: githubLink,
         }),
@@ -69,12 +128,11 @@ const AddProjectComponent = ({
         onProjectAdded && onProjectAdded(newProject);
         onClose();
       } else {
-        // Show error message
-        alert(`Error: ${data.message || "Failed to create project"}`);
+        setErrorMessage(data.message || "Failed to create project");
       }
     } catch (error) {
       console.error("Error creating project:", error);
-      alert("Failed to create project. Please try again.");
+      setErrorMessage("Failed to create project. Please try again.");
     } finally {
       setIsSubmitting(false);
     }
@@ -84,6 +142,22 @@ const AddProjectComponent = ({
     <div className={`pop-in ${isExiting ? "hidden" : ""}`}>
       <div style={{ padding: 16, flex: 1, overflowY: "auto" }}>
         <h3 style={{ color: "#ef758a", marginTop: 0 }}>Create a new project</h3>
+
+        {errorMessage && (
+          <div
+            style={{
+              color: "#e74c3c",
+              backgroundColor: "#ffeaea",
+              padding: "10px",
+              borderRadius: "4px",
+              marginBottom: "16px",
+              fontSize: "14px",
+            }}
+          >
+            {errorMessage}
+          </div>
+        )}
+
         <form onSubmit={handleSubmit}>
           <div style={{ marginBottom: 16 }}>
             <label
@@ -157,20 +231,24 @@ const AddProjectComponent = ({
 
             <button
               type="submit"
-              disabled={isSubmitting}
+              disabled={isSubmitting || isCheckingRepo}
               style={{
                 padding: "10px 16px",
                 backgroundColor: "#ef758a",
                 color: "#FFF",
                 border: "none",
                 borderRadius: 4,
-                cursor: isSubmitting ? "default" : "pointer",
+                cursor: isSubmitting || isCheckingRepo ? "default" : "pointer",
                 fontWeight: "bold",
-                opacity: isSubmitting ? 0.7 : 1,
+                opacity: isSubmitting || isCheckingRepo ? 0.7 : 1,
                 transition: "all 0.2s ease",
               }}
             >
-              {isSubmitting ? "Creating..." : "Create Project"}
+              {isCheckingRepo
+                ? "Validating Repo..."
+                : isSubmitting
+                  ? "Creating..."
+                  : "Create Project"}
             </button>
           </div>
         </form>

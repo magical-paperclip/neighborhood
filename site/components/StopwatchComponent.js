@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from "react";
-
 import { getToken } from "@/utils/storage";
 
 const StopwatchComponent = ({ onClose, onAddProject, isExiting, userData }) => {
@@ -12,7 +11,7 @@ const StopwatchComponent = ({ onClose, onAddProject, isExiting, userData }) => {
   const [approvedTime, setApprovedTime] = useState(0);
   const [projectName, setProjectName] = useState("");
   const [projects, setProjects] = useState([]);
-  const [data, setData] = useState([]);
+  const [commits, setCommits] = useState([]);
   const [showModal, setShowModal] = useState(false);
   const [commitMessage, setCommitMessage] = useState("");
   const [commitVideo, setCommitVideo] = useState(null);
@@ -37,11 +36,13 @@ const StopwatchComponent = ({ onClose, onAddProject, isExiting, userData }) => {
     let shipped = 0;
     let approved = 0;
 
-    data.forEach((entry) => {
-      const [hours, minutes] = entry.duration.split(":").map(Number);
+    commits.forEach((commit) => {
+      if (!commit.fields.duration) return;
+
+      const [hours, minutes] = commit.fields.duration.split(":").map(Number);
       const durationInHours = hours + minutes / 60;
 
-      switch (entry.status) {
+      switch (commit.fields.status) {
         case "P":
           pending += durationInHours;
           break;
@@ -57,7 +58,7 @@ const StopwatchComponent = ({ onClose, onAddProject, isExiting, userData }) => {
     setPendingTime(pending);
     setShippedTime(shipped);
     setApprovedTime(approved);
-  }, [data]);
+  }, [commits]);
 
   // Fetch Hackatime projects
   useEffect(() => {
@@ -95,6 +96,34 @@ const StopwatchComponent = ({ onClose, onAddProject, isExiting, userData }) => {
     };
 
     fetchProjects();
+  }, [userData]);
+
+  // Fetch commits
+  useEffect(() => {
+    const fetchCommits = async () => {
+      try {
+        const token = getToken();
+        if (!token) {
+          console.error("No token found");
+          return;
+        }
+
+        // Call the getCommits API with the token
+        const response = await fetch(`/api/getCommits?token=${token}`);
+
+        if (!response.ok) {
+          throw new Error(`API responded with status: ${response.status}`);
+        }
+
+        const commitsData = await response.json();
+        console.log("Commits data:", commitsData);
+        setCommits(commitsData);
+      } catch (error) {
+        console.error("Error fetching commits:", error);
+      }
+    };
+
+    fetchCommits();
   }, [userData]);
 
   const startStopwatch = () => {
@@ -172,7 +201,30 @@ const StopwatchComponent = ({ onClose, onAddProject, isExiting, userData }) => {
           videoUrl: videoUrl,
           projectName: projectName,
         }),
+      }).then(async (response) => {
+        const data = await response.json(); // parse JSON once
+        console.log(data);
+
+        return fetch("/api/createCommit", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            token: getToken(),
+            commitMessage: commitMessage,
+            videoUrl: videoUrl,
+            projectName: projectName,
+            session: data[0].id,
+          }),
+        });
       });
+
+      // After successful submission, refresh the commits list
+      const token = getToken();
+      const commitsResponse = await fetch(`/api/getCommits?token=${token}`);
+      const commitsData = await commitsResponse.json();
+      setCommits(commitsData);
 
       // Reset the stopwatch
       setTime(0);
@@ -198,6 +250,12 @@ const StopwatchComponent = ({ onClose, onAddProject, isExiting, userData }) => {
     const minutes = Math.floor((ms % 3600000) / 60000);
     const seconds = Math.floor((ms % 60000) / 1000);
     return `${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`;
+  };
+
+  const formatDatetime = (dateString) => {
+    if (!dateString) return "-";
+    const date = new Date(dateString);
+    return date.toLocaleString();
   };
 
   const PlayIcon = () => (
@@ -270,6 +328,7 @@ const StopwatchComponent = ({ onClose, onAddProject, isExiting, userData }) => {
             alignItems: "start",
             width: "100%",
             flexDirection: "row",
+            paddingBottom: "12px",
           }}
         >
           <select
@@ -328,6 +387,17 @@ const StopwatchComponent = ({ onClose, onAddProject, isExiting, userData }) => {
               <path d="M440-440H200v-80h240v-240h80v240h240v80H520v240h-80v-240Z" />
             </svg>
           </div>
+          <p
+            style={{
+              alignSelf: "center",
+              paddingLeft: "12px",
+              fontStyle: "italic",
+              color: "#ef758a",
+            }}
+          >
+            If your project isn't there, make sure to give it a github link in
+            the wakatime tab.
+          </p>
         </div>
         <div style={{ display: "flex", flexDirection: "column" }}>
           <div
@@ -560,7 +630,7 @@ const StopwatchComponent = ({ onClose, onAddProject, isExiting, userData }) => {
             </tr>
           </thead>
           <tbody>
-            {data.map((entry, index) => (
+            {commits.map((commit, index) => (
               <tr key={index}>
                 <td
                   style={{
@@ -571,7 +641,7 @@ const StopwatchComponent = ({ onClose, onAddProject, isExiting, userData }) => {
                     background: "transparent",
                   }}
                 >
-                  {entry.commitMessage}
+                  {commit.fields.message || "No message"}
                 </td>
                 <td
                   style={{
@@ -582,7 +652,7 @@ const StopwatchComponent = ({ onClose, onAddProject, isExiting, userData }) => {
                     background: "transparent",
                   }}
                 >
-                  {entry.startTime}
+                  {formatDatetime(commit.fields.startTime)}
                 </td>
                 <td
                   style={{
@@ -593,7 +663,7 @@ const StopwatchComponent = ({ onClose, onAddProject, isExiting, userData }) => {
                     background: "transparent",
                   }}
                 >
-                  {entry.stopTime}
+                  {formatDatetime(commit.fields.endTime)}
                 </td>
                 <td
                   style={{
@@ -604,7 +674,7 @@ const StopwatchComponent = ({ onClose, onAddProject, isExiting, userData }) => {
                     background: "transparent",
                   }}
                 >
-                  {entry.duration}
+                  {commit.fields.duration || "-"}
                 </td>
                 <td
                   style={{
@@ -618,10 +688,10 @@ const StopwatchComponent = ({ onClose, onAddProject, isExiting, userData }) => {
                   }}
                 >
                   <span
-                    title={getStatusTooltip(entry.status)}
+                    title={getStatusTooltip(commit.fields.status)}
                     style={{ cursor: "help" }}
                   >
-                    {entry.status}
+                    {commit.fields.status || "-"}
                   </span>
                 </td>
                 <td
@@ -633,7 +703,7 @@ const StopwatchComponent = ({ onClose, onAddProject, isExiting, userData }) => {
                     background: "transparent",
                   }}
                 >
-                  {entry.video ? (
+                  {commit.fields.videoUrl ? (
                     <button
                       onClick={() => {
                         const width = 1280;
@@ -641,7 +711,7 @@ const StopwatchComponent = ({ onClose, onAddProject, isExiting, userData }) => {
                         const left = (window.screen.width - width) / 2;
                         const top = (window.screen.height - height) / 2;
                         window.open(
-                          entry.video,
+                          commit.fields.videoUrl,
                           "videoPlayer",
                           `width=${width},height=${height},top=${top},left=${left},status=no,menubar=no,toolbar=no,resizable=yes`,
                         );

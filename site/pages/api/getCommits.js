@@ -27,16 +27,19 @@ export default async function handler(req, res) {
       return res.status(404).json({ message: "User not found" });
     }
 
-    const userEmail = userRecords[0].fields.email;
     const userRecordId = userRecords[0].id;
 
     // Get all projects attributed to this user
-    const attributedProjects = await base("hackatimeProjects")
+    const attributedProjects = await base("commits")
       .select({
-        filterByFormula: `{email} = '${userEmail}'`,
-        fields: ["name", "githubLink"],
+        filterByFormula: `{neighbor} = '${userRecordId}'`,
+        fields: ["message", "sessions", "videoLink"],
       })
       .all();
+    console.log(
+      "===================================================================================" +
+        attributedProjects,
+    );
     return res.status(200).json(attributedProjects);
   } catch (error) {
     console.error("Error fetching projects:", error);
