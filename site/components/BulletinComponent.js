@@ -166,7 +166,7 @@ const BulletinComponent = ({ isExiting, onClose }) => {
             <button 
               style={{
                 padding: "8px 16px",
-                backgroundColor: rsvpStatus === "Sent Cal Invite (Check Email)" ? "#78BA99" : "#f2cf64", 
+                backgroundColor: rsvpStatus === "Sent Cal Invite (Check Email)" ? "#78BA99" : "#FF6868",
                 backgroundImage: "bulletintop.jpg",
                 backgroundSize: "cover", 
                 color: "#fff",
