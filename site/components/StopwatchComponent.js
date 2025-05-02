@@ -31,28 +31,70 @@ const StopwatchComponent = ({ onClose, onAddProject, isExiting, userData }) => {
   }, [isRunning, startTime, elapsedTime]);
 
   useEffect(() => {
-    // Calculate times based on real data
+    // Calculate times based on real data from sessions
     let pending = 0;
     let shipped = 0;
     let approved = 0;
 
     commits.forEach((commit) => {
-      if (!commit.fields.duration) return;
+      // Get the total duration from all sessions in this commit
+      const sessionsData = commit.sessionDetails || [];
 
-      const [hours, minutes] = commit.fields.duration.split(":").map(Number);
-      const durationInHours = hours + minutes / 60;
+      sessionsData.forEach((session) => {
+        if (
+          !session.fields.duration &&
+          session.fields.startTime &&
+          session.fields.endTime
+        ) {
+          // Calculate duration if not available but start and end times are
+          const start = new Date(session.fields.startTime);
+          const end = new Date(session.fields.endTime);
+          const durationInMinutes = (end - start) / (1000 * 60);
 
-      switch (commit.fields.status) {
-        case "P":
-          pending += durationInHours;
-          break;
-        case "S":
-          shipped += durationInHours;
-          break;
-        case "A":
-          approved += durationInHours;
-          break;
-      }
+          // Add to appropriate category based on type
+          const type = commit.fields.approved || session.fields.approved;
+          switch (type) {
+            case "P":
+              pending += durationInMinutes / 60; // Convert to hours
+              break;
+            case "S":
+              shipped += durationInMinutes / 60;
+              break;
+            case "A":
+              approved += durationInMinutes / 60;
+              break;
+          }
+        } else if (session.fields.duration) {
+          // If duration is directly available
+          let durationInHours;
+          if (typeof session.fields.duration === "number") {
+            durationInHours = session.fields.duration / 60; // Assuming duration is in minutes
+          } else {
+            // Try to parse if it's a string like "1:30" (1 hour 30 minutes)
+            const durationParts = String(session.fields.duration)
+              .split(":")
+              .map(Number);
+            if (durationParts.length === 2) {
+              durationInHours = durationParts[0] + durationParts[1] / 60;
+            } else {
+              durationInHours = parseFloat(session.fields.duration) || 0;
+            }
+          }
+
+          const type = commit.fields.approved || session.fields.approved;
+          switch (type) {
+            case "P":
+              pending += durationInHours;
+              break;
+            case "S":
+              shipped += durationInHours;
+              break;
+            case "A":
+              approved += durationInHours;
+              break;
+          }
+        }
+      });
     });
 
     setPendingTime(pending);
@@ -81,11 +123,11 @@ const StopwatchComponent = ({ onClose, onAddProject, isExiting, userData }) => {
 
         // Format the projects data
         const projectNames = projects.map((project) => ({
-          id: project.fields.name || project.id, // Use the name field or fall back to id
+          id: project.id,
           name: project.fields.name || "Unnamed Project",
         }));
 
-        console.log("App Names:", projectNames);
+        console.log("Project Names:", projectNames);
         setProjects(projectNames);
         if (projectNames.length > 0 && !projectName) {
           setProjectName(projectNames[0].name);
@@ -116,7 +158,7 @@ const StopwatchComponent = ({ onClose, onAddProject, isExiting, userData }) => {
         }
 
         const commitsData = await response.json();
-        console.log("Commits data:", commitsData);
+        console.log("Commits data with sessions:", commitsData);
         setCommits(commitsData);
       } catch (error) {
         console.error("Error fetching commits:", error);
@@ -125,6 +167,39 @@ const StopwatchComponent = ({ onClose, onAddProject, isExiting, userData }) => {
 
     fetchCommits();
   }, [userData]);
+
+  const calculateTotalDuration = (commit) => {
+    const sessionsData = commit.sessionDetails || [];
+    let totalMinutes = 0;
+
+    sessionsData.forEach((session) => {
+      if (session.fields.duration) {
+        if (typeof session.fields.duration === "number") {
+          totalMinutes += session.fields.duration;
+        } else {
+          // Try to parse if it's a string like "1:30" (1 hour 30 minutes)
+          const durationParts = String(session.fields.duration)
+            .split(":")
+            .map(Number);
+          if (durationParts.length === 2) {
+            totalMinutes += durationParts[0] * 60 + durationParts[1];
+          } else {
+            totalMinutes += parseFloat(session.fields.duration) * 60 || 0;
+          }
+        }
+      } else if (session.fields.startTime && session.fields.endTime) {
+        // Calculate if duration not available
+        const start = new Date(session.fields.startTime);
+        const end = new Date(session.fields.endTime);
+        totalMinutes += (end - start) / (1000 * 60);
+      }
+    });
+
+    // Format as hours:minutes
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = Math.floor(totalMinutes % 60);
+    return `${hours}:${minutes.toString().padStart(2, "0")}`;
+  };
 
   const startStopwatch = () => {
     if (!isRunning && projectName != "") {
@@ -202,7 +277,7 @@ const StopwatchComponent = ({ onClose, onAddProject, isExiting, userData }) => {
           projectName: projectName,
         }),
       }).then(async (response) => {
-        const data = await response.json(); // parse JSON once
+        const data = await response.json();
         console.log(data);
 
         return fetch("/api/createCommit", {
@@ -359,13 +434,11 @@ const StopwatchComponent = ({ onClose, onAddProject, isExiting, userData }) => {
           </select>
           <div
             style={{
-              // Align the plus icon in the center
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
               width: "40px",
               height: "40px",
-              // Button style
               borderRadius: "50%",
               border: "2px solid #ef758a",
               backgroundColor: "transparent",
@@ -528,12 +601,12 @@ const StopwatchComponent = ({ onClose, onAddProject, isExiting, userData }) => {
           }}
         >
           <colgroup>
-            <col style={{ width: "45%" }} />
-            <col style={{ width: "13%" }} />
-            <col style={{ width: "13%" }} />
-            <col style={{ width: "13%" }} />
-            <col style={{ width: "8%" }} />
-            <col style={{ width: "8%" }} />
+            <col style={{ width: "35%" }} />
+            <col style={{ width: "15%" }} />
+            <col style={{ width: "15%" }} />
+            <col style={{ width: "10%" }} />
+            <col style={{ width: "10%" }} />
+            <col style={{ width: "15%" }} />
           </colgroup>
           <thead>
             <tr>
@@ -565,7 +638,7 @@ const StopwatchComponent = ({ onClose, onAddProject, isExiting, userData }) => {
                   letterSpacing: "0.5px",
                 }}
               >
-                Start Time
+                Commit Time
               </th>
               <th
                 style={{
@@ -580,7 +653,7 @@ const StopwatchComponent = ({ onClose, onAddProject, isExiting, userData }) => {
                   letterSpacing: "0.5px",
                 }}
               >
-                Stop Time
+                Project
               </th>
               <th
                 style={{
@@ -610,7 +683,7 @@ const StopwatchComponent = ({ onClose, onAddProject, isExiting, userData }) => {
                   letterSpacing: "0.5px",
                 }}
               >
-                Status
+                Type
               </th>
               <th
                 style={{
@@ -652,7 +725,7 @@ const StopwatchComponent = ({ onClose, onAddProject, isExiting, userData }) => {
                     background: "transparent",
                   }}
                 >
-                  {formatDatetime(commit.fields.startTime)}
+                  {formatDatetime(commit.fields.commitTime)}
                 </td>
                 <td
                   style={{
@@ -663,7 +736,7 @@ const StopwatchComponent = ({ onClose, onAddProject, isExiting, userData }) => {
                     background: "transparent",
                   }}
                 >
-                  {formatDatetime(commit.fields.endTime)}
+                  {commit.fields.hackatimeProject || "-"}
                 </td>
                 <td
                   style={{
@@ -674,7 +747,7 @@ const StopwatchComponent = ({ onClose, onAddProject, isExiting, userData }) => {
                     background: "transparent",
                   }}
                 >
-                  {commit.fields.duration || "-"}
+                  {calculateTotalDuration(commit)}
                 </td>
                 <td
                   style={{
@@ -688,10 +761,10 @@ const StopwatchComponent = ({ onClose, onAddProject, isExiting, userData }) => {
                   }}
                 >
                   <span
-                    title={getStatusTooltip(commit.fields.status)}
+                    title={getStatusTooltip(commit.fields.Type)}
                     style={{ cursor: "help" }}
                   >
-                    {commit.fields.status || "-"}
+                    {commit.fields.Type || "-"}
                   </span>
                 </td>
                 <td
@@ -703,15 +776,15 @@ const StopwatchComponent = ({ onClose, onAddProject, isExiting, userData }) => {
                     background: "transparent",
                   }}
                 >
-                  {commit.fields.videoUrl ? (
+                  {commit.fields.videoLink ? (
                     <button
                       onClick={() => {
                         const width = 1280;
-                        const height = 720; // 16:9 aspect ratio
+                        const height = 720;
                         const left = (window.screen.width - width) / 2;
                         const top = (window.screen.height - height) / 2;
                         window.open(
-                          commit.fields.videoUrl,
+                          commit.fields.videoLink,
                           "videoPlayer",
                           `width=${width},height=${height},top=${top},left=${left},status=no,menubar=no,toolbar=no,resizable=yes`,
                         );

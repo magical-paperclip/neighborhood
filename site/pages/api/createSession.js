@@ -50,6 +50,7 @@ export default async function handler(req, res) {
             startTime: startTime,
             endTime: endTime,
             hackatimeProject: [projectRecord[0].id],
+            // duration in minutes, end time and start time are in ISO format
           },
         },
       ],
