@@ -396,10 +396,9 @@ const StopwatchComponent = ({ onClose, onAddProject, isExiting, userData }) => {
     try {
       setIsUploading(true);
 
-      // Handle video upload if a file is selected
       let videoUrl = null;
       if (commitVideo) {
-        // Get pre-signed URL from our API
+        // Get presigned URL from API
         const getUrlResponse = await fetch("/api/getSignedUrl", {
           method: "POST",
           headers: {
@@ -417,7 +416,7 @@ const StopwatchComponent = ({ onClose, onAddProject, isExiting, userData }) => {
 
         const { uploadUrl, fileUrl } = await getUrlResponse.json();
 
-        // Use the new CORS proxy to upload the file directly
+        // Use the proxy API to upload the video
         const uploadResponse = await fetch(
           `/api/proxy?url=${encodeURIComponent(uploadUrl)}`,
           {
@@ -425,7 +424,7 @@ const StopwatchComponent = ({ onClose, onAddProject, isExiting, userData }) => {
             headers: {
               "Content-Type": commitVideo.type,
             },
-            body: commitVideo, // Send the actual file, not JSON
+            body: commitVideo, // Send the actual file
           },
         );
 
@@ -437,7 +436,8 @@ const StopwatchComponent = ({ onClose, onAddProject, isExiting, userData }) => {
         console.log("Upload successful, URL:", videoUrl);
       }
 
-      await fetch("/api/createSession", {
+      // Only proceed if the upload succeeded
+      const sessionResponse = await fetch("/api/createSession", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -449,43 +449,42 @@ const StopwatchComponent = ({ onClose, onAddProject, isExiting, userData }) => {
           videoUrl: videoUrl,
           projectName: projectName,
         }),
-      }).then(async (response) => {
-        const data = await response.json();
-        console.log(data);
-
-        return fetch("/api/createCommit", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            token: getToken(),
-            commitMessage: commitMessage,
-            videoUrl: videoUrl,
-            projectName: projectName,
-            session: data[0].id,
-          }),
-        });
       });
 
-      // After successful submission, refresh the commits list
+      if (!sessionResponse.ok) {
+        throw new Error("Failed to create session");
+      }
+
+      const sessionData = await sessionResponse.json();
+
+      const commitResponse = await fetch("/api/createCommit", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          token: getToken(),
+          commitMessage: commitMessage,
+          videoUrl: videoUrl,
+          projectName: projectName,
+          session: sessionData[0].id,
+        }),
+      });
+
+      if (!commitResponse.ok) {
+        throw new Error("Failed to create commit");
+      }
+
+      // After successful commit, refresh the commits list
       const token = getToken();
       const commitsResponse = await fetch(`/api/getCommits?token=${token}`);
       const commitsData = await commitsResponse.json();
       setCommits(commitsData);
 
-      // Reset the stopwatch
-      setTime(0);
-      setElapsedTime(0);
-      setCommitMessage("");
-      setCommitVideo(null);
-      setShowModal(false);
+      showAlert("Commit successfully submitted!");
     } catch (error) {
-      console.error("Error saving stretch:", error);
-      showAlert(
-        "There was an error saving your work. Please try again.",
-        "Error",
-      );
+      console.error("Error during submission:", error);
+      showAlert("Failed to submit the commit");
     } finally {
       setIsUploading(false);
     }
