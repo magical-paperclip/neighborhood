@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { getToken } from "@/utils/storage";
 
 const StopwatchComponent = ({ onClose, onAddProject, isExiting, userData }) => {
@@ -23,6 +23,38 @@ const StopwatchComponent = ({ onClose, onAddProject, isExiting, userData }) => {
     onCancel: () => {},
     isConfirm: false,
   });
+
+  const timeLimitSound = useRef(null);
+  const successSound = useRef(null);
+
+  // Initialize audio elements on component mount
+  useEffect(() => {
+    // Initialize audio objects in useEffect to avoid SSR issues
+    if (typeof window !== "undefined") {
+      timeLimitSound.current = new Audio("/among.mp3");
+      successSound.current = new Audio("/beep.mp3");
+    }
+  }, []);
+
+  // Functions to play sounds
+  const playTimeLimitSound = () => {
+    if (timeLimitSound.current) {
+      // Reset the audio to the beginning in case it was played before
+      timeLimitSound.current.currentTime = 0;
+      timeLimitSound.current.play().catch((error) => {
+        console.error("Error playing time limit sound:", error);
+      });
+    }
+  };
+
+  const playSuccessSound = () => {
+    if (successSound.current) {
+      successSound.current.currentTime = 0;
+      successSound.current.play().catch((error) => {
+        console.error("Error playing success sound:", error);
+      });
+    }
+  };
 
   const CustomModal = () => {
     if (!alertModal.show) return null;
@@ -178,6 +210,37 @@ const StopwatchComponent = ({ onClose, onAddProject, isExiting, userData }) => {
         setElapsedTime(newElapsedTime);
         setStartTime(now);
         setTime(newElapsedTime);
+      }, 10);
+    }
+    return () => clearInterval(intervalId);
+  }, [isRunning, startTime, elapsedTime]);
+
+  useEffect(() => {
+    let intervalId;
+    if (isRunning) {
+      intervalId = setInterval(() => {
+        const now = Date.now();
+        const newElapsedTime = elapsedTime + (now - startTime);
+        setElapsedTime(newElapsedTime);
+        setStartTime(now);
+        setTime(newElapsedTime);
+
+        // Check if elapsed time exceeds 1.5 hours (90 minutes)
+        // 90 minutes * 60 seconds * 1000 milliseconds = 5,400,000 ms =5400000
+        if (newElapsedTime > 100) {
+          // Stop the timer
+          setIsRunning(false);
+          playTimeLimitSound();
+          // Show alert
+          showAlert(
+            "Your stretch has exceeded the maximum limit of 1.5 hours and has been automatically stopped.",
+            "Time Limit Reached",
+            () => {
+              // Open the commit modal to finish the stretch
+              setShowModal(true);
+            },
+          );
+        }
       }, 10);
     }
     return () => clearInterval(intervalId);
@@ -505,6 +568,10 @@ const StopwatchComponent = ({ onClose, onAddProject, isExiting, userData }) => {
       setProjectName("");
       setElapsedTime(0);
 
+      // Play success sound
+      //
+      playSuccessSound();
+
       // After successful commit, refresh the commits list
       const token = getToken();
       const commitsResponse = await fetch(`/api/getCommits?token=${token}`);
@@ -786,6 +853,10 @@ const StopwatchComponent = ({ onClose, onAddProject, isExiting, userData }) => {
             </div>
           ))}
         </div>
+        <p style={{ color: "red", fontWeight: 900 }}>
+          Sessions have a maximum duration of 1.5 hours, they'll be cut off if
+          you go over that.
+        </p>
       </div>
 
       <div
@@ -795,6 +866,7 @@ const StopwatchComponent = ({ onClose, onAddProject, isExiting, userData }) => {
           padding: "0 0 32px 0",
           maxHeight: "calc(100vh - 300px)",
           overflowY: "auto",
+          paddingBottom: 16,
         }}
       >
         <table
