@@ -412,9 +412,6 @@ function PlayerModel({ onLoad, containerRef, moveState }) {
       
       // Add to container
       containerRef.current.add(playerModel);
-      
-      // Log available animations
-      console.log("Available animations:", Object.keys(actions));
             
       onLoad?.();
       
