@@ -122,7 +122,7 @@ function Effects({ isLoading, fadeTimeRef }) {
   const composerRef = useRef();
   const pastelPassRef = useRef();
   
-  // Setup post-processing effects
+  // Setup post-processing effects - balanced for performance and visuals
   useEffect(() => {
     const composer = new EffectComposer(gl);
     composerRef.current = composer;
@@ -130,22 +130,22 @@ function Effects({ isLoading, fadeTimeRef }) {
     const renderPass = new RenderPass(scene, camera);
     composer.addPass(renderPass);
     
-    // Add bloom effect - use much lower values to start
+    // Add bloom effect - balanced values
     const bloomPass = new UnrealBloomPass(
       new THREE.Vector2(size.width, size.height),
-      0.3, // reduced from 0.8
-      0.2, // reduced from 0.4
-      0.4  // reduced from 0.85
+      0.2, // balanced value 
+      0.15, // balanced value
+      0.3  // balanced value
     );
     composer.addPass(bloomPass);
     
-    // Add custom pastel shader - reduce initial values
+    // Add custom pastel shader with balanced processing
     const pastelPass = new ShaderPass(PastelVibrantShader);
-    pastelPass.uniforms.saturation.value = 1.0; // reduced from 1.2
-    pastelPass.uniforms.brightness.value = 1.0; // kept at 1.0
-    pastelPass.uniforms.pastelAmount.value = 0.2; // reduced from 1.0
-    pastelPass.uniforms.warmth.value = 0.05; // reduced from 0.1
-    pastelPass.uniforms.opacity.value = 1.0; // changed from 0.0 to 1.0 to make sure we see something
+    pastelPass.uniforms.saturation.value = 0.9; // increased from 0.7
+    pastelPass.uniforms.brightness.value = 0.95; // increased from 0.8
+    pastelPass.uniforms.pastelAmount.value = 0.15; // increased from 0.1
+    pastelPass.uniforms.warmth.value = 0.03; // increased from 0.02
+    pastelPass.uniforms.opacity.value = 1.0;
     pastelPassRef.current = pastelPass;
     
     composer.addPass(pastelPass);
@@ -161,7 +161,7 @@ function Effects({ isLoading, fadeTimeRef }) {
     composerRef.current?.setSize(size.width, size.height);
   }, [size]);
   
-  // Don't use the composer for initial rendering - let the default renderer work first
+  // Use the composer efficiently - update every frame but with simpler effects
   useFrame((state) => {
     // Use the default renderer for the first few frames
     if (state.clock.elapsedTime < 1) {
@@ -184,7 +184,7 @@ function Effects({ isLoading, fadeTimeRef }) {
       }
     }
     
-    // Skip the composer rendering if it's not ready
+    // Use composer every frame but with optimized settings
     if (composerRef.current && composerRef.current.renderer) {
       composerRef.current.render();
       return 1; // Signal to R3F to skip its own render
@@ -194,20 +194,21 @@ function Effects({ isLoading, fadeTimeRef }) {
   return null;
 }
 
-// Cloud component
+// Cloud component - balanced number of clouds
 function Clouds() {
   const cloudGroup = useRef();
   const toonGradient = useMemo(() => createToonGradient(), []);
+  const clockRef = useRef(0);
   
-  // Generate cloud data
+  // Generate cloud data - balanced quantity and complexity
   const cloudData = useMemo(() => {
     const clouds = [];
-    for (let i = 0; i < 40; i++) {
+    for (let i = 0; i < 25; i++) { // increased from 20
       const x = Math.random() * 180 - 90;
       const z = Math.random() * 180 - 90;
       const y = Math.random() * 5 + 25;
       
-      const segments = 3 + Math.floor(Math.random() * 5);
+      const segments = 2 + Math.floor(Math.random() * 3);
       const parts = [];
       
       for (let j = 0; j < segments; j++) {
@@ -227,13 +228,18 @@ function Clouds() {
     return clouds;
   }, []);
   
-  // Animate clouds
-  useFrame(() => {
+  // Animate clouds - constant smooth motion
+  useFrame((state) => {
     if (!cloudGroup.current) return;
     
+    // Use proper delta time for smooth animation
+    const delta = state.clock.getDelta();
+    clockRef.current += delta;
+    
     cloudGroup.current.children.forEach((cloudCluster, i) => {
-      cloudCluster.position.x += Math.sin(Date.now() * 0.0001 + i * 0.1) * 0.01;
-      cloudCluster.position.z += Math.cos(Date.now() * 0.0001 + i * 0.1) * 0.01;
+      const speed = 0.005; // reduced speed but ensure constant motion
+      cloudCluster.position.x += Math.sin(clockRef.current * 0.1 + i * 0.1) * speed;
+      cloudCluster.position.z += Math.cos(clockRef.current * 0.1 + i * 0.1) * speed;
     });
   });
   
@@ -243,14 +249,14 @@ function Clouds() {
         <group key={i} position={cloud.position}>
           {cloud.parts.map((part, j) => (
             <mesh key={j} position={part.position} scale={part.scale}>
-              <sphereGeometry args={[1, 10, 10]} />
+              <sphereGeometry args={[1, 8, 8]} /> {/* better balance of geometry complexity */}
               <meshToonMaterial 
                 color={0xffffff}
                 gradientMap={toonGradient}
                 transparent={true}
                 opacity={0.9}
                 emissive={0xffffee}
-                emissiveIntensity={0.1}
+                emissiveIntensity={0.08} // increased from 0.05
               />
             </mesh>
           ))}
@@ -260,7 +266,7 @@ function Clouds() {
   );
 }
 
-// Ground plane component
+// Ground plane component - balanced
 function Ground({ onLoad }) {
   const [texture, setTexture] = useState(null);
   const toonGradient = useMemo(() => createToonGradient(), []);
@@ -272,14 +278,13 @@ function Ground({ onLoad }) {
       (loadedTexture) => {
         loadedTexture.wrapS = THREE.RepeatWrapping;
         loadedTexture.wrapT = THREE.RepeatWrapping;
-        loadedTexture.repeat.set(500, 500);
+        loadedTexture.repeat.set(300, 300); // increased from 250, less than original 500
         setTexture(loadedTexture);
         if (onLoad) onLoad();
       },
       undefined,
       (error) => {
         console.error('Error loading ground texture:', error);
-        // Call onLoad even if there's an error to prevent blocking
         if (onLoad) onLoad();
       }
     );
@@ -294,7 +299,7 @@ function Ground({ onLoad }) {
         color={0x8dc63f}
         side={THREE.DoubleSide}
         emissive={0x1a4d1a}
-        emissiveIntensity={0.2}
+        emissiveIntensity={0.15} // increased from 0.1
       />
     </mesh>
   );
@@ -744,10 +749,10 @@ function Scene({ hasEnteredNeighborhood, setHasEnteredNeighborhood, isLoading, s
   
   return (
     <>
-      {/* Scene lights - increase intensity */}
-      <ambientLight color={0xf4ccff} intensity={1.5} />
-      <directionalLight position={[5, 5, 5]} intensity={1.2} />
-      <pointLight position={[-5, 5, -5]} intensity={1.0} />
+      {/* Scene lights - balanced intensity */}
+      <ambientLight color={0xf4ccff} intensity={1.2} /> {/* increased from 1.0 */}
+      <directionalLight position={[5, 5, 5]} intensity={1.1} /> {/* increased from 1.0 */}
+      <pointLight position={[-5, 5, -5]} intensity={0.5} /> {/* added back but with lower intensity */}
       
       {/* Clouds */}
       <Clouds />
@@ -758,7 +763,7 @@ function Scene({ hasEnteredNeighborhood, setHasEnteredNeighborhood, isLoading, s
       {/* Map */}
       <MapModel onLoad={() => setAssetsLoaded(prev => ({ ...prev, map: true }))} />
       
-      {/* Player model - pass moveState directly */}
+      {/* Player model */}
       <PlayerModel 
         containerRef={containerRef} 
         moveState={moveState}
@@ -798,11 +803,12 @@ export default function NeighborhoodEnvironment({
         gl={{
           antialias: true,
           alpha: true,
-          powerPreference: "low-power",
-          outputEncoding: THREE.sRGBEncoding
+          powerPreference: "high-performance",
+          outputEncoding: THREE.sRGBEncoding,
+          precision: "mediump" // medium precision for better balance
         }}
-        dpr={[1, 2]} // Limit pixel ratio for better performance
-        shadows={false} // Turn off shadows until needed
+        dpr={[0.9, 1.75]} // adjusted for better balance
+        shadows={false}
       >
         {/* Camera controls initial look target */}
         <CameraController />
