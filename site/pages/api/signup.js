@@ -16,6 +16,36 @@ const generateOTP = () => {
   return Math.floor(1000 + Math.random() * 9000).toString();
 };
 
+// Send OTP email via Loops
+const sendOTPEmail = async (email, otp) => {
+  const url = 'https://app.loops.so/api/v1/transactional';
+  const payload = {
+    transactionalId: "cma76zj24015peh6e3ipy52yq",
+    email: email,
+    dataVariables: {
+      otp: otp
+    }
+  };
+
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.LOOPS_AUTH_TOKEN}`
+      },
+      body: JSON.stringify(payload)
+    });
+
+    const result = await response.json();
+    console.log('Loops email response:', result);
+    return result;
+  } catch (error) {
+    console.error('Error sending email:', error);
+    throw error;
+  }
+};
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ message: 'Method not allowed' });
@@ -53,6 +83,9 @@ export default async function handler(req, res) {
       }
     ]);
 
+    // Send OTP email
+    await sendOTPEmail(normalizedEmail, otp);
+
     // If user exists, return success without creating new record
     if (records.length > 0) {
       return res.status(200).json({ 
@@ -79,7 +112,7 @@ export default async function handler(req, res) {
     });
 
   } catch (error) {
-    console.error('Airtable Error:', error);
+    console.error('Error:', error);
     return res.status(500).json({ 
       message: 'Error processing registration',
       error: error.message 

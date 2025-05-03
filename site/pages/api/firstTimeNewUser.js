@@ -25,6 +25,34 @@ export default async function handler(req, res) {
   // Normalize email by stripping whitespace and converting to lowercase
   const normalizedEmail = email.trim().toLowerCase();
 
+  const sendSignupEmail = async (email) => {
+    const url = 'https://app.loops.so/api/v1/transactional';
+    const payload = {
+      transactionalId: "cma7uh0614piwzpnt4awb22mv",
+      email: email
+    };
+  
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${process.env.LOOPS_AUTH_TOKEN}`
+        },
+        body: JSON.stringify(payload)
+      });
+  
+      const result = await response.json();
+      console.log('Loops email response:', result);
+      return result;
+    } catch (error) {
+      console.error('Error sending email:', error);
+      throw error;
+    }
+  };
+
+  await sendSignupEmail(normalizedEmail)
+
   try {
     // Check if user already exists
     const records = await base(process.env.AIRTABLE_TABLE_ID)
