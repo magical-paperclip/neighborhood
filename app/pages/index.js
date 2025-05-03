@@ -122,12 +122,19 @@ export default function Home() {
         <div style={{height: "100vh", width: "100%", gap: 32, justifyContent: "space-between", paddingTop: 16, paddingBottom: 16, display: "flex", flexDirection: "column", paddingLeft: 32}}>
 
         <div style={{position: "absolute", right: 16, top: 16}}>
-          {!hasEnteredNeighborhood &&
+          {/* {!hasEnteredNeighborhood &&
           <img
             style={{width: 32, height: 32, cursor: "pointer"}}
             src="logout.svg"
             onClick={handleLogout}
-          />}
+          />} */}
+          {!hasEnteredNeighborhood && <div>
+            <img
+            style={{width: 32, height: 32, cursor: "pointer"}}
+            src={userData.profilePicture}
+            onClick={handleLogout}
+          />
+          </div>}
         </div>
 
         <div style={{position: "absolute", right: 16, bottom: 16}}>
