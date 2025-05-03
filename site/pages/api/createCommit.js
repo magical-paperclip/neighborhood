@@ -9,11 +9,10 @@ export default async function handler(req, res) {
     return res.status(405).json({ message: "Method not allowed" });
   }
 
-  const { token, projectName, startTime, endTime, videoUrl } = req.body;
+  const { token, commitMessage, videoUrl, projectName, session } = req.body;
 
-  if (!token || !projectName || !startTime || !endTime || !videoUrl) {
-    console.log("Missing required fields");
-    return res.status(400).json({ message: "Missing required fields" });
+  if (!token || !commitMessage || !videoUrl || !projectName || !session) {
+    return res.status(400).json({ message: "Missing required parameters" });
   }
 
   try {
@@ -42,22 +41,22 @@ export default async function handler(req, res) {
       return res.status(404).json({ message: "Project not found" });
     }
 
-    const sessionRecords = await base("sessions").create(
+    const commitRecord = await base("commits").create(
       [
         {
           fields: {
+            message: commitMessage,
+            videoLink: videoUrl,
+            commitTime: new Date().toISOString(),
+            sessions: [session],
             neighbor: [userRecord.id],
-            startTime: startTime,
-            endTime: endTime,
             hackatimeProject: [projectRecord[0].id],
-            // duration in minutes, end time and start time are in ISO format
           },
         },
       ],
       { typecast: true },
     );
-
-    return res.status(201).json(sessionRecords);
+    return res.status(201).json(commitRecord);
   } catch (error) {
     console.error(error);
     return res.status(500).json({ message: "Internal server error" });

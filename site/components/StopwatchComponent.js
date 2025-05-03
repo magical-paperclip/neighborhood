@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from "react";
-
 import { getToken } from "@/utils/storage";
 
 const StopwatchComponent = ({ onClose, onAddProject, isExiting, userData }) => {
@@ -12,10 +11,163 @@ const StopwatchComponent = ({ onClose, onAddProject, isExiting, userData }) => {
   const [approvedTime, setApprovedTime] = useState(0);
   const [projectName, setProjectName] = useState("");
   const [projects, setProjects] = useState([]);
-  const [data, setData] = useState([]);
+  const [commits, setCommits] = useState([]);
   const [showModal, setShowModal] = useState(false);
   const [commitMessage, setCommitMessage] = useState("");
   const [commitVideo, setCommitVideo] = useState(null);
+  const [alertModal, setAlertModal] = useState({
+    show: false,
+    message: "",
+    title: "",
+    onConfirm: () => {},
+    onCancel: () => {},
+    isConfirm: false,
+  });
+
+  const CustomModal = () => {
+    if (!alertModal.show) return null;
+
+    const handleConfirm = () => {
+      const confirmCallback = alertModal.onConfirm;
+      setAlertModal((prev) => ({ ...prev, show: false }));
+      if (confirmCallback) confirmCallback();
+    };
+
+    const handleCancel = () => {
+      const cancelCallback = alertModal.onCancel;
+      setAlertModal((prev) => ({ ...prev, show: false }));
+      if (cancelCallback) cancelCallback();
+    };
+
+    // Handle backdrop click - only close if clicking outside modal content
+    const handleBackdropClick = (e) => {
+      if (e.target === e.currentTarget) {
+        handleCancel();
+      }
+    };
+
+    return (
+      <div
+        style={{
+          position: "fixed",
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: "rgba(0,0,0,0.5)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          zIndex: 1500,
+        }}
+        onClick={handleBackdropClick}
+      >
+        <div
+          style={{
+            backgroundColor: "white",
+            padding: "24px",
+            borderRadius: "8px",
+            width: "400px",
+            boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Rest of the modal content remains the same */}
+          <h3
+            style={{
+              margin: "0 0 8px 0",
+              color: "#ef758a",
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+            }}
+          >
+            <span style={{ fontSize: "20px" }}>
+              {alertModal.isConfirm ? "❓" : "ℹ️"}
+            </span>
+            {alertModal.title || "Notice"}
+          </h3>
+          <p
+            style={{
+              margin: "0 0 16px 0",
+              color: "#666",
+              fontSize: "14px",
+            }}
+          >
+            {alertModal.message}
+          </p>
+
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "flex-end",
+              gap: "8px",
+            }}
+          >
+            {alertModal.isConfirm && (
+              <button
+                type="button"
+                onClick={handleCancel}
+                style={{
+                  padding: "8px 16px",
+                  border: "1px solid #ddd",
+                  borderRadius: "4px",
+                  backgroundColor: "pink",
+                  color: "black",
+                  cursor: "pointer",
+                  fontSize: "14px",
+                }}
+              >
+                Cancel
+              </button>
+            )}
+            <button
+              onClick={handleConfirm}
+              style={{
+                padding: "8px 16px",
+                border: "none",
+                borderRadius: "4px",
+                backgroundColor: "#ef758a",
+                color: "white",
+                cursor: "pointer",
+                fontSize: "14px",
+                fontWeight: "500",
+              }}
+            >
+              {alertModal.isConfirm ? "Confirm" : "OK"}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const showAlert = (message, title = "Notice", onConfirm = () => {}) => {
+    setAlertModal({
+      show: true,
+      message,
+      title,
+      onConfirm,
+      onCancel: () => {},
+      isConfirm: false,
+    });
+  };
+
+  const showConfirm = (
+    message,
+    title = "Confirm",
+    onConfirm = () => {},
+    onCancel = () => {},
+  ) => {
+    setAlertModal({
+      show: true,
+      message,
+      title,
+      onConfirm,
+      onCancel,
+      isConfirm: true,
+    });
+  };
 
   useEffect(() => {
     let intervalId;
@@ -32,32 +184,76 @@ const StopwatchComponent = ({ onClose, onAddProject, isExiting, userData }) => {
   }, [isRunning, startTime, elapsedTime]);
 
   useEffect(() => {
-    // Calculate times based on real data
+    // Calculate times based on real data from sessions
     let pending = 0;
     let shipped = 0;
     let approved = 0;
 
-    data.forEach((entry) => {
-      const [hours, minutes] = entry.duration.split(":").map(Number);
-      const durationInHours = hours + minutes / 60;
+    commits.forEach((commit) => {
+      // Get the total duration from all sessions in this commit
+      const sessionsData = commit.sessionDetails || [];
 
-      switch (entry.status) {
-        case "P":
-          pending += durationInHours;
-          break;
-        case "S":
-          shipped += durationInHours;
-          break;
-        case "A":
-          approved += durationInHours;
-          break;
-      }
+      sessionsData.forEach((session) => {
+        if (
+          !session.fields.duration &&
+          session.fields.startTime &&
+          session.fields.endTime
+        ) {
+          // Calculate duration if not available but start and end times are
+          const start = new Date(session.fields.startTime);
+          const end = new Date(session.fields.endTime);
+          const durationInMinutes = (end - start) / (1000 * 60);
+
+          // Add to appropriate category based on type
+          const type = commit.fields.approved || session.fields.approved;
+          switch (type) {
+            case "P":
+              pending += durationInMinutes / 60; // Convert to hours
+              break;
+            case "S":
+              shipped += durationInMinutes / 60;
+              break;
+            case "A":
+              approved += durationInMinutes / 60;
+              break;
+          }
+        } else if (session.fields.duration) {
+          // If duration is directly available
+          let durationInHours;
+          if (typeof session.fields.duration === "number") {
+            durationInHours = session.fields.duration / 60; // Assuming duration is in minutes
+          } else {
+            // Try to parse if it's a string like "1:30" (1 hour 30 minutes)
+            const durationParts = String(session.fields.duration)
+              .split(":")
+              .map(Number);
+            if (durationParts.length === 2) {
+              durationInHours = durationParts[0] + durationParts[1] / 60;
+            } else {
+              durationInHours = parseFloat(session.fields.duration) || 0;
+            }
+          }
+
+          const type = commit.fields.approved || session.fields.approved;
+          switch (type) {
+            case "P":
+              pending += durationInHours;
+              break;
+            case "S":
+              shipped += durationInHours;
+              break;
+            case "A":
+              approved += durationInHours;
+              break;
+          }
+        }
+      });
     });
 
     setPendingTime(pending);
     setShippedTime(shipped);
     setApprovedTime(approved);
-  }, [data]);
+  }, [commits]);
 
   // Fetch Hackatime projects
   useEffect(() => {
@@ -80,11 +276,11 @@ const StopwatchComponent = ({ onClose, onAddProject, isExiting, userData }) => {
 
         // Format the projects data
         const projectNames = projects.map((project) => ({
-          id: project.fields.name || project.id, // Use the name field or fall back to id
+          id: project.id,
           name: project.fields.name || "Unnamed Project",
         }));
 
-        console.log("App Names:", projectNames);
+        console.log("Project Names:", projectNames);
         setProjects(projectNames);
         if (projectNames.length > 0 && !projectName) {
           setProjectName(projectNames[0].name);
@@ -97,70 +293,174 @@ const StopwatchComponent = ({ onClose, onAddProject, isExiting, userData }) => {
     fetchProjects();
   }, [userData]);
 
+  // Fetch commits
+  useEffect(() => {
+    const fetchCommits = async () => {
+      try {
+        const token = getToken();
+        if (!token) {
+          console.error("No token found");
+          return;
+        }
+
+        // Call the getCommits API with the token
+        const response = await fetch(`/api/getCommits?token=${token}`);
+
+        if (!response.ok) {
+          throw new Error(`API responded with status: ${response.status}`);
+        }
+
+        const commitsData = await response.json();
+        console.log("Commits data with sessions:", commitsData);
+        setCommits(commitsData);
+      } catch (error) {
+        console.error("Error fetching commits:", error);
+      }
+    };
+
+    fetchCommits();
+  }, [userData]);
+
+  const calculateTotalDuration = (commit) => {
+    const sessionsData = commit.sessionDetails || [];
+    let totalMinutes = 0;
+
+    sessionsData.forEach((session) => {
+      if (session.fields.duration) {
+        if (typeof session.fields.duration === "number") {
+          totalMinutes += session.fields.duration;
+        } else {
+          // Try to parse if it's a string like "1:30" (1 hour 30 minutes)
+          const durationParts = String(session.fields.duration)
+            .split(":")
+            .map(Number);
+          if (durationParts.length === 2) {
+            totalMinutes += durationParts[0] * 60 + durationParts[1];
+          } else {
+            totalMinutes += parseFloat(session.fields.duration) * 60 || 0;
+          }
+        }
+      } else if (session.fields.startTime && session.fields.endTime) {
+        // Calculate if duration not available
+        const start = new Date(session.fields.startTime);
+        const end = new Date(session.fields.endTime);
+        totalMinutes += (end - start) / (1000 * 60);
+      }
+    });
+
+    // Format as hours:minutes
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = Math.floor(totalMinutes % 60);
+    return `${hours}:${minutes.toString().padStart(2, "0")}`;
+  };
+
   const startStopwatch = () => {
     if (!isRunning && projectName != "") {
       setStartTime(Date.now());
       setIsRunning(true);
     } else {
-      window.alert("Please select a project before starting the stopwatch");
+      showAlert("Please select a project before starting the stopwatch");
     }
   };
 
   const stopStopwatch = () => {
     if (isRunning) {
+      setIsRunning(false);
       const currentTime = formatTime(elapsedTime);
-      const shouldStop = window.confirm(
+      showConfirm(
         `Are you ready to end the time at ${currentTime}?`,
+        "Confirm End",
+        () => {
+          console.log(`Time elapsed: ${currentTime}`);
+          setShowModal(true);
+        },
+        () => {
+          setIsRunning(false);
+        },
       );
-
-      if (shouldStop) {
-        console.log(`Time elapsed: ${currentTime}`);
-        setIsRunning(false);
-        setShowModal(true);
-      }
     }
   };
+  const [isUploading, setIsUploading] = useState(false);
 
   const handleFinishStretch = async () => {
     if (!commitMessage.trim() && !commitVideo) {
-      alert("Please enter a commit message before submitting");
+      showAlert("Please enter a commit message before submitting");
+      return;
+    }
+
+    // Prevent multiple submissions
+    if (isUploading) {
       return;
     }
 
     try {
-      // Handle video upload if a file is selected
+      setIsUploading(true);
+
       let videoUrl = null;
       if (commitVideo) {
-        const formData = new FormData();
-        formData.append("video", commitVideo);
-        formData.append("sessionId", userData?.slackId || "anonymous");
+        // Sanitize filename before sending to API
+        const originalFilename = commitVideo.name;
 
-        console.log("Uploading video:", commitVideo.name);
+        // Create sanitized filename (lowercase)
+        let sanitizedFilename;
+        const lastDotIndex = originalFilename.lastIndexOf(".");
 
-        try {
-          const response = await fetch("/api/uploadVideo", {
-            method: "POST",
-            body: formData,
-          });
-
-          console.log("Upload response status:", response.status);
-
-          if (!response.ok) {
-            const errorText = await response.text();
-            console.error("Upload error:", errorText);
-            throw new Error(`Video upload failed: ${errorText}`);
-          }
-
-          const result = await response.json();
-          videoUrl = result.videoUrl;
-          console.log("Upload successful, URL:", videoUrl);
-        } catch (error) {
-          console.error("Upload exception:", error);
-          throw error;
+        if (lastDotIndex === -1) {
+          // No extension
+          sanitizedFilename = originalFilename
+            .toLowerCase()
+            .replace(/[^a-z]/g, "");
+        } else {
+          // Has extension - preserve it
+          const extension = originalFilename
+            .substring(lastDotIndex)
+            .toLowerCase();
+          const baseName = originalFilename
+            .substring(0, lastDotIndex)
+            .toLowerCase()
+            .replace(/[^a-z]/g, "");
+          sanitizedFilename = (baseName || "file") + extension;
         }
-      }
 
-      await fetch("/api/createSession", {
+        // Get presigned URL from API
+        const getUrlResponse = await fetch("/api/getSignedUrl", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            contentType: commitVideo.type,
+            filename: sanitizedFilename, // Use sanitized filename
+          }),
+        });
+
+        if (!getUrlResponse.ok) {
+          throw new Error("Failed to get upload URL");
+        }
+
+        const { uploadUrl, fileUrl } = await getUrlResponse.json();
+
+        // Use the proxy API to upload the video
+        const uploadResponse = await fetch(
+          `/api/proxy?url=${encodeURIComponent(uploadUrl)}`,
+          {
+            method: "PUT",
+            headers: {
+              "Content-Type": commitVideo.type,
+            },
+            body: commitVideo, // Send the actual file
+          },
+        );
+
+        if (!uploadResponse.ok) {
+          throw new Error("Failed to upload video");
+        }
+
+        videoUrl = fileUrl;
+        console.log("Upload successful, URL:", videoUrl);
+      }
+      // Only proceed if the upload succeeded
+      const sessionResponse = await fetch("/api/createSession", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -174,15 +474,49 @@ const StopwatchComponent = ({ onClose, onAddProject, isExiting, userData }) => {
         }),
       });
 
-      // Reset the stopwatch
-      setTime(0);
-      setElapsedTime(0);
+      if (!sessionResponse.ok) {
+        throw new Error("Failed to create session");
+      }
+
+      const sessionData = await sessionResponse.json();
+
+      const commitResponse = await fetch("/api/createCommit", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          token: getToken(),
+          commitMessage: commitMessage,
+          videoUrl: videoUrl,
+          projectName: projectName,
+          session: sessionData[0].id,
+        }),
+      });
+
+      if (!commitResponse.ok) {
+        throw new Error("Failed to create commit");
+      }
+
+      // Close the modal and remove the commit message and every everything
+      setShowModal(false);
       setCommitMessage("");
       setCommitVideo(null);
-      setShowModal(false);
+      setProjectName("");
+      setElapsedTime(0);
+
+      // After successful commit, refresh the commits list
+      const token = getToken();
+      const commitsResponse = await fetch(`/api/getCommits?token=${token}`);
+      const commitsData = await commitsResponse.json();
+      setCommits(commitsData);
+
+      showAlert("Commit successfully submitted!");
     } catch (error) {
-      console.error("Error saving stretch:", error);
-      alert("There was an error saving your work. Please try again.");
+      console.error("Error during submission:", error);
+      showAlert("Failed to submit the commit");
+    } finally {
+      setIsUploading(false);
     }
   };
 
@@ -198,6 +532,12 @@ const StopwatchComponent = ({ onClose, onAddProject, isExiting, userData }) => {
     const minutes = Math.floor((ms % 3600000) / 60000);
     const seconds = Math.floor((ms % 60000) / 1000);
     return `${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`;
+  };
+
+  const formatDatetime = (dateString) => {
+    if (!dateString) return "-";
+    const date = new Date(dateString);
+    return date.toLocaleString();
   };
 
   const PlayIcon = () => (
@@ -270,6 +610,7 @@ const StopwatchComponent = ({ onClose, onAddProject, isExiting, userData }) => {
             alignItems: "start",
             width: "100%",
             flexDirection: "row",
+            paddingBottom: "12px",
           }}
         >
           <select
@@ -300,13 +641,11 @@ const StopwatchComponent = ({ onClose, onAddProject, isExiting, userData }) => {
           </select>
           <div
             style={{
-              // Align the plus icon in the center
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
               width: "40px",
               height: "40px",
-              // Button style
               borderRadius: "50%",
               border: "2px solid #ef758a",
               backgroundColor: "transparent",
@@ -328,6 +667,17 @@ const StopwatchComponent = ({ onClose, onAddProject, isExiting, userData }) => {
               <path d="M440-440H200v-80h240v-240h80v240h240v80H520v240h-80v-240Z" />
             </svg>
           </div>
+          <p
+            style={{
+              alignSelf: "center",
+              paddingLeft: "12px",
+              fontStyle: "italic",
+              color: "#ef758a",
+            }}
+          >
+            If your project isn't there, make sure to give it a github link in
+            the wakatime tab.
+          </p>
         </div>
         <div style={{ display: "flex", flexDirection: "column" }}>
           <div
@@ -458,12 +808,12 @@ const StopwatchComponent = ({ onClose, onAddProject, isExiting, userData }) => {
           }}
         >
           <colgroup>
-            <col style={{ width: "45%" }} />
-            <col style={{ width: "13%" }} />
-            <col style={{ width: "13%" }} />
-            <col style={{ width: "13%" }} />
-            <col style={{ width: "8%" }} />
-            <col style={{ width: "8%" }} />
+            <col style={{ width: "35%" }} />
+            <col style={{ width: "15%" }} />
+            <col style={{ width: "15%" }} />
+            <col style={{ width: "10%" }} />
+            <col style={{ width: "10%" }} />
+            <col style={{ width: "15%" }} />
           </colgroup>
           <thead>
             <tr>
@@ -495,7 +845,7 @@ const StopwatchComponent = ({ onClose, onAddProject, isExiting, userData }) => {
                   letterSpacing: "0.5px",
                 }}
               >
-                Start Time
+                Commit Time
               </th>
               <th
                 style={{
@@ -510,7 +860,7 @@ const StopwatchComponent = ({ onClose, onAddProject, isExiting, userData }) => {
                   letterSpacing: "0.5px",
                 }}
               >
-                Stop Time
+                Project
               </th>
               <th
                 style={{
@@ -540,7 +890,7 @@ const StopwatchComponent = ({ onClose, onAddProject, isExiting, userData }) => {
                   letterSpacing: "0.5px",
                 }}
               >
-                Status
+                Type
               </th>
               <th
                 style={{
@@ -560,7 +910,7 @@ const StopwatchComponent = ({ onClose, onAddProject, isExiting, userData }) => {
             </tr>
           </thead>
           <tbody>
-            {data.map((entry, index) => (
+            {commits.map((commit, index) => (
               <tr key={index}>
                 <td
                   style={{
@@ -571,7 +921,7 @@ const StopwatchComponent = ({ onClose, onAddProject, isExiting, userData }) => {
                     background: "transparent",
                   }}
                 >
-                  {entry.commitMessage}
+                  {commit.fields.message || "No message"}
                 </td>
                 <td
                   style={{
@@ -582,7 +932,7 @@ const StopwatchComponent = ({ onClose, onAddProject, isExiting, userData }) => {
                     background: "transparent",
                   }}
                 >
-                  {entry.startTime}
+                  {formatDatetime(commit.fields.commitTime)}
                 </td>
                 <td
                   style={{
@@ -593,7 +943,7 @@ const StopwatchComponent = ({ onClose, onAddProject, isExiting, userData }) => {
                     background: "transparent",
                   }}
                 >
-                  {entry.stopTime}
+                  {commit.fields.hackatimeProject || "-"}
                 </td>
                 <td
                   style={{
@@ -604,7 +954,7 @@ const StopwatchComponent = ({ onClose, onAddProject, isExiting, userData }) => {
                     background: "transparent",
                   }}
                 >
-                  {entry.duration}
+                  {calculateTotalDuration(commit)}
                 </td>
                 <td
                   style={{
@@ -618,10 +968,10 @@ const StopwatchComponent = ({ onClose, onAddProject, isExiting, userData }) => {
                   }}
                 >
                   <span
-                    title={getStatusTooltip(entry.status)}
+                    title={getStatusTooltip(commit.fields.Type)}
                     style={{ cursor: "help" }}
                   >
-                    {entry.status}
+                    {commit.fields.Type || "-"}
                   </span>
                 </td>
                 <td
@@ -633,15 +983,15 @@ const StopwatchComponent = ({ onClose, onAddProject, isExiting, userData }) => {
                     background: "transparent",
                   }}
                 >
-                  {entry.video ? (
+                  {commit.fields.videoLink ? (
                     <button
                       onClick={() => {
                         const width = 1280;
-                        const height = 720; // 16:9 aspect ratio
+                        const height = 720;
                         const left = (window.screen.width - width) / 2;
                         const top = (window.screen.height - height) / 2;
                         window.open(
-                          entry.video,
+                          commit.fields.videoLink,
                           "videoPlayer",
                           `width=${width},height=${height},top=${top},left=${left},status=no,menubar=no,toolbar=no,resizable=yes`,
                         );
@@ -803,25 +1153,79 @@ const StopwatchComponent = ({ onClose, onAddProject, isExiting, userData }) => {
               </button>
               <button
                 onClick={handleFinishStretch}
+                disabled={isUploading}
                 style={{
                   padding: "8px 16px",
                   border: "none",
                   borderRadius: "4px",
-                  backgroundColor: "#ef758a",
+                  backgroundColor: isUploading ? "#cccccc" : "#ef758a",
                   color: "white",
-                  cursor: "pointer",
+                  cursor: isUploading ? "not-allowed" : "pointer",
                   fontSize: "14px",
                   fontWeight: "500",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
                 }}
               >
-                Save Stretch
+                {isUploading ? (
+                  <>
+                    <span
+                      className="loading-spinner"
+                      style={{
+                        display: "inline-block",
+                        width: "16px",
+                        height: "16px",
+                        border: "2px solid #ffffff",
+                        borderTopColor: "transparent",
+                        borderRadius: "50%",
+                        marginRight: "8px",
+                        animation: "spin 1s linear infinite",
+                      }}
+                    ></span>
+                    Uploading...
+                  </>
+                ) : (
+                  "Save Stretch"
+                )}
               </button>
             </div>
+            {isUploading ? (
+              <>
+                <p style={{ marginTop: 10 }}>
+                  This might freeze, please wait...
+                </p>
+                <p>Take this time to check the slack :D</p>
+              </>
+            ) : (
+              <></>
+            )}
           </div>
         </div>
       )}
+      <CustomModal />
     </div>
   );
 };
+
+<style jsx global>{`
+  @keyframes spin {
+    0% {
+      transform: rotate(0deg);
+    }
+    100% {
+      transform: rotate(360deg);
+    }
+  }
+  .loading-spinner {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    border: 2px solid #ffffff;
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+  }
+`}</style>;
 
 export default StopwatchComponent;

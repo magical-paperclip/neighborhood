@@ -1658,7 +1658,9 @@ const HackTimeComponent = ({ isExiting, onClose, userData }) => {
                             activeCard === "hackatime"
                           ? "scale(0.96)"
                           : "none",
-                  animation: isStopwatchHurt ? "hurtShake 0.5s ease-in-out" : "none"
+                  animation: isStopwatchHurt
+                    ? "hurtShake 0.5s ease-in-out"
+                    : "none",
                 }}
                 onMouseEnter={() => setHoveredCard("stopwatch")}
                 onMouseLeave={() => {
@@ -1673,6 +1675,7 @@ const HackTimeComponent = ({ isExiting, onClose, userData }) => {
                   setIsStopwatchHurt(true);
                   setTimeout(() => {
                     setIsStopwatchHurt(false);
+                    setTimeTrackingMethod("stopwatch");
                   }, 500);
                 }}
               >
@@ -1711,9 +1714,8 @@ const HackTimeComponent = ({ isExiting, onClose, userData }) => {
                   Simply click start, start doing whatever design or code for
                   your project, and then press stop to end the ticking.{" "}
                   <b>Warning 20hr max </b>
-                  <br/>
-                  <br/>
-                  <b>will activate in 3 days</b>
+                  <br />
+                  <br />
                 </p>
               </div>
             </div>
@@ -1815,8 +1817,9 @@ const HackTimeComponent = ({ isExiting, onClose, userData }) => {
                 </p>
 
                 {projects
-                  .filter((project) =>
-                    getTotalDuration(projectSessions[project.name] || []) > 0
+                  .filter(
+                    (project) =>
+                      getTotalDuration(projectSessions[project.name] || []) > 0,
                   )
                   .map((project) => {
                     const projectChecked = isProjectChecked(project.name);
@@ -1922,7 +1925,9 @@ const HackTimeComponent = ({ isExiting, onClose, userData }) => {
                                   borderRadius: "4px",
                                   backgroundColor: "white",
                                   cursor: "pointer",
-                                  transform: openedProjects.includes(project.name)
+                                  transform: openedProjects.includes(
+                                    project.name,
+                                  )
                                     ? "rotate(180deg)"
                                     : "none",
                                 }}
@@ -1932,16 +1937,20 @@ const HackTimeComponent = ({ isExiting, onClose, userData }) => {
                             </div>
                           )}
                         </div>
-                        {openedProjects.includes(project.name) && hasCommits && (
-                          <div
-                            style={{ paddingLeft: "24px", marginBottom: "8px" }}
-                          >
-                            {Object.entries(grouped).map(
-                              ([commitSha, commitGroup]) =>
-                                renderCommitGroup(project.name, commitGroup),
-                            )}
-                          </div>
-                        )}
+                        {openedProjects.includes(project.name) &&
+                          hasCommits && (
+                            <div
+                              style={{
+                                paddingLeft: "24px",
+                                marginBottom: "8px",
+                              }}
+                            >
+                              {Object.entries(grouped).map(
+                                ([commitSha, commitGroup]) =>
+                                  renderCommitGroup(project.name, commitGroup),
+                              )}
+                            </div>
+                          )}
                       </div>
                     );
                   })}
@@ -1977,9 +1986,10 @@ const HackTimeComponent = ({ isExiting, onClose, userData }) => {
                   Hey, there <br />
                   <br />
                   It appears this is your first time using Hackatime and you
-                  have no projects set up yet. Head on over to hackatime.hackclub.com
-                  and they'll walk you through how to begin logging your time in
-                  Hackatime directly in your IDE automagically.
+                  have no projects set up yet. Head on over to
+                  hackatime.hackclub.com and they'll walk you through how to
+                  begin logging your time in Hackatime directly in your IDE
+                  automagically.
                   <br />
                   <br /> Once you log some time if you come back here you'll see
                   your time in the interface and you can claim it.
