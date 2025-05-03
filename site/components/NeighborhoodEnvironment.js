@@ -776,10 +776,6 @@ export default function NeighborhoodEnvironment({
   setHasEnteredNeighborhood,
 }) {
   const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    setHasEnteredNeighborhood(true);
-  }, []);
   
   return (
     <div
