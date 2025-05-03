@@ -227,7 +227,7 @@ const StopwatchComponent = ({ onClose, onAddProject, isExiting, userData }) => {
 
         // Check if elapsed time exceeds 1.5 hours (90 minutes)
         // 90 minutes * 60 seconds * 1000 milliseconds = 5,400,000 ms =5400000
-        if (newElapsedTime > 100) {
+        if (newElapsedTime > 5400000) {
           // Stop the timer
           setIsRunning(false);
           playTimeLimitSound();
