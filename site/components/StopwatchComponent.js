@@ -505,7 +505,7 @@ const StopwatchComponent = ({ onClose, onAddProject, isExiting, userData }) => {
 
         // Use the proxy API to upload the video
         const uploadResponse = await fetch(
-          `/api/proxy?url=${encodeURIComponent(uploadUrl)}`,
+          `https://cproxy.spectralo.hackclub.app/?url=` + uploadUrl,
           {
             method: "PUT",
             headers: {

@@ -18,11 +18,14 @@ importers:
         specifier: ^9.7.5
         version: 9.7.5(@react-three/fiber@8.18.0(@types/react@19.1.2)(react-dom@18.2.0(react@18.2.0))(react@18.2.0)(three@0.175.0))(react@18.2.0)(three@0.175.0)
       '@react-three/drei':
-        specifier: ^9.99.0
+        specifier: ^9.92.7
         version: 9.122.0(@react-three/fiber@8.18.0(@types/react@19.1.2)(react-dom@18.2.0(react@18.2.0))(react@18.2.0)(three@0.175.0))(@types/react@19.1.2)(@types/three@0.176.0)(react-dom@18.2.0(react@18.2.0))(react@18.2.0)(three@0.175.0)(use-sync-external-store@1.5.0(react@18.2.0))
       '@react-three/fiber':
         specifier: ^8.15.16
         version: 8.18.0(@types/react@19.1.2)(react-dom@18.2.0(react@18.2.0))(react@18.2.0)(three@0.175.0)
+      '@react-three/rapier':
+        specifier: ^1.2.1
+        version: 1.5.0(@react-three/fiber@8.18.0(@types/react@19.1.2)(react-dom@18.2.0(react@18.2.0))(react@18.2.0)(three@0.175.0))(react@18.2.0)(three@0.175.0)
       '@slack/web-api':
         specifier: ^7.9.1
         version: 7.9.1
@@ -267,6 +270,9 @@ packages:
 
   '@dimforge/rapier3d-compat@0.12.0':
     resolution: {integrity: sha512-uekIGetywIgopfD97oDL5PfeezkFpNhwlzlaEYNOA0N6ghdsOvh/HYjSMek5Q2O1PYvRSDFcqFVJl4r4ZBwOow==}
+
+  '@dimforge/rapier3d-compat@0.14.0':
+    resolution: {integrity: sha512-/uHrUzS+CRQ+NQrrJCEDUkhwHlNsAAexbNXgbN9sHY+GwR+SFFAFrxRr8Llf5/AJZzqiLANdQIfJ63Cw4gJVqw==}
 
   '@electron-forge/cli@7.8.0':
     resolution: {integrity: sha512-XZ+Hg7pxeE9pgrahqcpMlND+VH0l0UTZLyO5wkI+YfanNyBQksB2mw24XeEtCA6x8F2IaEYdIGgijmPF6qpjzA==}
@@ -672,6 +678,13 @@ packages:
         optional: true
       react-native:
         optional: true
+
+  '@react-three/rapier@1.5.0':
+    resolution: {integrity: sha512-gylk2KyCer9EoymFyTyc+g2IqyAq4mTbZgaHoSJi6gHoXlJsC2LVeN4jedvegvjUsXPExdE60wHjCPa+DS4iXw==}
+    peerDependencies:
+      '@react-three/fiber': '>=8.9.0'
+      react: '>=18.0.0'
+      three: '>=0.139.0'
 
   '@sindresorhus/is@4.6.0':
     resolution: {integrity: sha512-t09vSN3MdfsyCHoFcTRCH/iUtG7OJ0CsjzB8cjAmKc/va/kIgeDI/TxsigdncE/4be734m0cvIYwNaV4i2XqAw==}
@@ -3295,6 +3308,8 @@ snapshots:
 
   '@dimforge/rapier3d-compat@0.12.0': {}
 
+  '@dimforge/rapier3d-compat@0.14.0': {}
+
   '@electron-forge/cli@7.8.0(encoding@0.1.13)':
     dependencies:
       '@electron-forge/core': 7.8.0(encoding@0.1.13)
@@ -3895,6 +3910,15 @@ snapshots:
       react-dom: 18.2.0(react@18.2.0)
     transitivePeerDependencies:
       - '@types/react'
+
+  '@react-three/rapier@1.5.0(@react-three/fiber@8.18.0(@types/react@19.1.2)(react-dom@18.2.0(react@18.2.0))(react@18.2.0)(three@0.175.0))(react@18.2.0)(three@0.175.0)':
+    dependencies:
+      '@dimforge/rapier3d-compat': 0.14.0
+      '@react-three/fiber': 8.18.0(@types/react@19.1.2)(react-dom@18.2.0(react@18.2.0))(react@18.2.0)(three@0.175.0)
+      react: 18.2.0
+      suspend-react: 0.1.3(react@18.2.0)
+      three: 0.175.0
+      three-stdlib: 2.36.0(three@0.175.0)
 
   '@sindresorhus/is@4.6.0': {}
 

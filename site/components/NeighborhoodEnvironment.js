@@ -1,10 +1,14 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useMemo } from "react";
 import * as THREE from "three";
-import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader";
+import { Canvas, useFrame, useThree, extend } from "@react-three/fiber";
+import { useGLTF, useAnimations, OrbitControls } from "@react-three/drei";
 import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
 import { ShaderPass } from "three/examples/jsm/postprocessing/ShaderPass.js";
+
+// Extend Three.js classes to make them available in JSX
+extend({ EffectComposer, RenderPass, UnrealBloomPass, ShaderPass });
 
 // Custom shader for pastel vibrant look
 const PastelVibrantShader = {
@@ -81,56 +85,7 @@ const PastelVibrantShader = {
   `,
 };
 
-// Function to create clouds
-function createClouds(scene) {
-  const cloudGroup = new THREE.Group();
-  scene.add(cloudGroup);
-
-  const cloudGeometry = new THREE.SphereGeometry(1, 10, 10);
-  const cloudMaterial = new THREE.MeshToonMaterial({
-    color: 0xffffff,
-    gradientMap: createToonGradient(),
-    transparent: true,
-    opacity: 0.9,
-    emissive: 0xffffee,
-    emissiveIntensity: 0.1,
-  });
-
-  // Create several clouds at different positions
-  for (let i = 0; i < 40; i++) {
-    const cloudCluster = new THREE.Group();
-
-    // Random position within bounds
-    const x = Math.random() * 180 - 90;
-    const z = Math.random() * 180 - 90;
-    const y = Math.random() * 5 + 25; // Higher altitude
-
-    cloudCluster.position.set(x, y, z);
-
-    // Create a cluster of spheres for each cloud
-    const segments = 3 + Math.floor(Math.random() * 5);
-    for (let j = 0; j < segments; j++) {
-      const cloudPart = new THREE.Mesh(cloudGeometry, cloudMaterial);
-
-      // Random scale for each part
-      const scale = 3 + Math.random() * 4;
-      cloudPart.scale.set(scale, scale * 0.6, scale);
-
-      // Position within cluster
-      cloudPart.position.x = (Math.random() - 0.5) * 5;
-      cloudPart.position.z = (Math.random() - 0.5) * 5;
-      cloudPart.position.y = (Math.random() - 0.5) * 2;
-
-      cloudCluster.add(cloudPart);
-    }
-
-    cloudGroup.add(cloudCluster);
-  }
-
-  return cloudGroup;
-}
-
-// Function to create a toon gradient texture
+// Create a toon gradient texture
 function createToonGradient() {
   const canvas = document.createElement("canvas");
   canvas.width = 4;
@@ -161,632 +116,671 @@ function createToonGradient() {
   return texture;
 }
 
-export default function NeighborhoodEnvironment({
-  hasEnteredNeighborhood,
-  setHasEnteredNeighborhood,
-}) {
-  const containerRef = useRef(null);
-  const animationRef = useRef(null);
-  const startTimeRef = useRef(null);
-  const cameraRef = useRef(null);
-  const playerRef = useRef(null);
-  const mixerRef = useRef(null);
-  const currentActionRef = useRef(null);
-  const animationsRef = useRef(null);
-  const fadeTimeRef = useRef(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const composerRef = useRef(null);
-  const pastelPassRef = useRef(null);
+// PostProcessing effects
+function Effects({ isLoading, fadeTimeRef }) {
+  const { gl, scene, camera, size } = useThree();
+  const composerRef = useRef();
+  const pastelPassRef = useRef();
+  
+  // Setup post-processing effects - balanced for performance and visuals
+  useEffect(() => {
+    const composer = new EffectComposer(gl);
+    composerRef.current = composer;
+    
+    const renderPass = new RenderPass(scene, camera);
+    composer.addPass(renderPass);
+    
+    // Add bloom effect - balanced values
+    const bloomPass = new UnrealBloomPass(
+      new THREE.Vector2(size.width, size.height),
+      0.2, // balanced value 
+      0.15, // balanced value
+      0.3  // balanced value
+    );
+    composer.addPass(bloomPass);
+    
+    // Add custom pastel shader with balanced processing
+    const pastelPass = new ShaderPass(PastelVibrantShader);
+    pastelPass.uniforms.saturation.value = 0.9; // increased from 0.7
+    pastelPass.uniforms.brightness.value = 0.95; // increased from 0.8
+    pastelPass.uniforms.pastelAmount.value = 0.15; // increased from 0.1
+    pastelPass.uniforms.warmth.value = 0.03; // increased from 0.02
+    pastelPass.uniforms.opacity.value = 1.0;
+    pastelPassRef.current = pastelPass;
+    
+    composer.addPass(pastelPass);
+    
+    // Cleanup
+    return () => {
+      composer.dispose();
+    };
+  }, [gl, scene, camera, size]);
+  
+  // Handle resize
+  useEffect(() => {
+    composerRef.current?.setSize(size.width, size.height);
+  }, [size]);
+  
+  // Use the composer efficiently - update every frame but with simpler effects
+  useFrame((state) => {
+    // Use the default renderer for the first few frames
+    if (state.clock.elapsedTime < 1) {
+      return;
+    }
+    
+    // Handle fade in effect
+    if (!isLoading && fadeTimeRef.current) {
+      const fadeProgress = Math.min(
+        (Date.now() - fadeTimeRef.current) / 2000,
+        1
+      );
+      
+      if (pastelPassRef.current) {
+        pastelPassRef.current.uniforms.opacity.value = fadeProgress;
+      }
+      
+      if (fadeProgress === 1) {
+        fadeTimeRef.current = null;
+      }
+    }
+    
+    // Use composer every frame but with optimized settings
+    if (composerRef.current && composerRef.current.renderer) {
+      composerRef.current.render();
+      return 1; // Signal to R3F to skip its own render
+    }
+  }, 1);
+  
+  return null;
+}
 
-  const keysRef = useRef({
+// Cloud component - balanced number of clouds
+function Clouds() {
+  const cloudGroup = useRef();
+  const toonGradient = useMemo(() => createToonGradient(), []);
+  const clockRef = useRef(0);
+  
+  // Generate cloud data - balanced quantity and complexity
+  const cloudData = useMemo(() => {
+    const clouds = [];
+    for (let i = 0; i < 25; i++) { // increased from 20
+      const x = Math.random() * 180 - 90;
+      const z = Math.random() * 180 - 90;
+      const y = Math.random() * 5 + 25;
+      
+      const segments = 2 + Math.floor(Math.random() * 3);
+      const parts = [];
+      
+      for (let j = 0; j < segments; j++) {
+        const scale = 3 + Math.random() * 4;
+        parts.push({
+          position: [
+            (Math.random() - 0.5) * 5,
+            (Math.random() - 0.5) * 2,
+            (Math.random() - 0.5) * 5
+          ],
+          scale: [scale, scale * 0.6, scale]
+        });
+      }
+      
+      clouds.push({ position: [x, y, z], parts });
+    }
+    return clouds;
+  }, []);
+  
+  // Animate clouds - constant smooth motion
+  useFrame((state) => {
+    if (!cloudGroup.current) return;
+    
+    // Use proper delta time for smooth animation
+    const delta = state.clock.getDelta();
+    clockRef.current += delta;
+    
+    cloudGroup.current.children.forEach((cloudCluster, i) => {
+      const speed = 0.005; // reduced speed but ensure constant motion
+      cloudCluster.position.x += Math.sin(clockRef.current * 0.1 + i * 0.1) * speed;
+      cloudCluster.position.z += Math.cos(clockRef.current * 0.1 + i * 0.1) * speed;
+    });
+  });
+  
+  return (
+    <group ref={cloudGroup}>
+      {cloudData.map((cloud, i) => (
+        <group key={i} position={cloud.position}>
+          {cloud.parts.map((part, j) => (
+            <mesh key={j} position={part.position} scale={part.scale}>
+              <sphereGeometry args={[1, 8, 8]} /> {/* better balance of geometry complexity */}
+              <meshToonMaterial 
+                color={0xffffff}
+                gradientMap={toonGradient}
+                transparent={true}
+                opacity={0.9}
+                emissive={0xffffee}
+                emissiveIntensity={0.08} // increased from 0.05
+              />
+            </mesh>
+          ))}
+        </group>
+      ))}
+    </group>
+  );
+}
+
+// Ground plane component - balanced
+function Ground({ onLoad }) {
+  const [texture, setTexture] = useState(null);
+  const toonGradient = useMemo(() => createToonGradient(), []);
+  
+  useEffect(() => {
+    const loader = new THREE.TextureLoader();
+    loader.load(
+      '/animal-crossing.png', 
+      (loadedTexture) => {
+        loadedTexture.wrapS = THREE.RepeatWrapping;
+        loadedTexture.wrapT = THREE.RepeatWrapping;
+        loadedTexture.repeat.set(300, 300); // increased from 250, less than original 500
+        setTexture(loadedTexture);
+        if (onLoad) onLoad();
+      },
+      undefined,
+      (error) => {
+        console.error('Error loading ground texture:', error);
+        if (onLoad) onLoad();
+      }
+    );
+  }, [onLoad]);
+  
+  return (
+    <mesh rotation={[Math.PI / 2, 0, 0]} position={[0, 0, 0]}>
+      <planeGeometry args={[1000, 1000]} />
+      <meshToonMaterial
+        map={texture}
+        gradientMap={toonGradient}
+        color={0x8dc63f}
+        side={THREE.DoubleSide}
+        emissive={0x1a4d1a}
+        emissiveIntensity={0.15} // increased from 0.1
+      />
+    </mesh>
+  );
+}
+
+// Map model component
+function MapModel({ onLoad }) {
+  const { scene: mapModel } = useGLTF("/models/sf_map_3.glb");
+  const toonGradient = useMemo(() => createToonGradient(), []);
+  
+  useEffect(() => {
+    if (mapModel) {
+      mapModel.scale.set(3.0, 3.0, 3.0);
+      mapModel.position.set(0.0, -0.01, 0.0);
+      
+      // Add toon shading to materials
+      mapModel.traverse((child) => {
+        if (child.isMesh) {
+          const originalMaterial = child.material;
+          child.material = new THREE.MeshToonMaterial({
+            map: originalMaterial.map,
+            normalMap: originalMaterial.normalMap,
+            gradientMap: toonGradient,
+            side: THREE.DoubleSide,
+            color: originalMaterial.color,
+            transparent: originalMaterial.transparent,
+            opacity: originalMaterial.opacity,
+          });
+        }
+      });
+      
+      onLoad?.();
+    }
+  }, [mapModel, toonGradient, onLoad]);
+  
+  return <primitive object={mapModel} />;
+}
+
+// Player model component
+function PlayerModel({ onLoad, containerRef, moveState }) {
+  const { scene: playerModel, animations } = useGLTF("/models/player.glb");
+  const { actions, mixer } = useAnimations(animations, playerModel);
+  const toonGradient = useMemo(() => createToonGradient(), []);
+  const currentAnimRef = useRef('idle');
+  const lastAnimChangeTime = useRef(0);
+  const animationNamesRef = useRef({ idle: null, run: null });
+  
+  // Configure animations on first load
+  useEffect(() => {
+    if (!playerModel || !mixer || !actions || Object.keys(actions).length === 0) return;
+    
+    // Find animation names once and store them
+    const idleAnimName = Object.keys(actions).find(name => 
+      name.toLowerCase().includes('idle')
+    );
+    
+    const runAnimName = Object.keys(actions).find(name => 
+      name.toLowerCase().includes('run')
+    );
+    
+    // Store animation names for later use
+    animationNamesRef.current = {
+      idle: idleAnimName,
+      run: runAnimName
+    };
+    
+    console.log("Found animations:", {
+      idle: idleAnimName,
+      run: runAnimName
+    });
+    
+    // Configure all animations for proper looping
+    Object.keys(actions).forEach(name => {
+      const action = actions[name];
+      action.loop = THREE.LoopRepeat;  // Make animation loop continuously
+      action.clampWhenFinished = false; // Don't freeze on last frame
+      action.zeroSlopeAtEnd = false;    // Don't flatten end transition
+      action.zeroSlopeAtStart = false;  // Don't flatten start transition
+    });
+    
+    // Start with idle animation
+    if (idleAnimName) {
+      actions[idleAnimName].play();
+      currentAnimRef.current = 'idle';
+    }
+    
+  }, [playerModel, actions, mixer]);
+  
+  // Handle model setup
+  useEffect(() => {
+    if (playerModel) {
+      playerModel.scale.set(0.027, 0.027, 0.027);
+      playerModel.rotation.y = (Math.PI / 4) * -1;
+      
+      // Add toon shading
+      playerModel.traverse((child) => {
+        if (child.isMesh) {
+          const originalMaterial = child.material;
+          child.material = new THREE.MeshToonMaterial({
+            map: originalMaterial.map,
+            normalMap: originalMaterial.normalMap,
+            gradientMap: toonGradient,
+            side: THREE.DoubleSide,
+            color: originalMaterial.color,
+            transparent: originalMaterial.transparent,
+            opacity: originalMaterial.opacity,
+          });
+        }
+      });
+      
+      // Add to container
+      containerRef.current.add(playerModel);
+            
+      onLoad?.();
+      
+      // Cleanup
+      return () => {
+        containerRef.current.remove(playerModel);
+      };
+    }
+  }, [playerModel, actions, toonGradient, containerRef, onLoad]);
+  
+  // Handle animation changes with useFrame for smoother transitions
+  useFrame((state) => {
+    // Skip if no actions available
+    if (!actions || Object.keys(actions).length === 0 || !mixer) return;
+    
+    // Update mixer with proper delta time
+    mixer.update(state.clock.getDelta());
+    
+    // Check if player is moving
+    const isMoving = moveState.w || moveState.s;
+    
+    // Get cached animation names
+    const { idle: idleAnimName, run: runAnimName } = animationNamesRef.current;
+    if (!idleAnimName || !runAnimName) return;
+    
+    // Don't switch animations too frequently (debounce)
+    if (state.clock.elapsedTime - lastAnimChangeTime.current < 0.5) {
+      return;
+    }
+    
+    // Handle animation transitions when movement state changes
+    if (isMoving && currentAnimRef.current !== 'run') {
+      console.log("Switching to run animation");
+      
+      // Smoothly crossfade between animations without resetting
+      actions[idleAnimName].fadeOut(0.5);
+      actions[runAnimName].reset().fadeIn(0.5).play();
+      
+      currentAnimRef.current = 'run';
+      lastAnimChangeTime.current = state.clock.elapsedTime;
+      
+    } else if (!isMoving && currentAnimRef.current !== 'idle') {
+      console.log("Switching to idle animation");
+      
+      // Smoothly crossfade between animations without resetting
+      actions[runAnimName].fadeOut(0.5);
+      actions[idleAnimName].reset().fadeIn(0.5).play();
+      
+      currentAnimRef.current = 'idle';
+      lastAnimChangeTime.current = state.clock.elapsedTime;
+    }
+  });
+  
+  return null;
+}
+
+// Scene component
+function Scene({ hasEnteredNeighborhood, setHasEnteredNeighborhood, isLoading, setIsLoading }) {
+  const { scene, camera } = useThree();
+  const containerRef = useRef(new THREE.Object3D());
+  const fadeTimeRef = useRef(null);
+  
+  // Movement state - use state instead of ref to trigger re-renders
+  const [moveState, setMoveState] = useState({
     w: false,
     a: false,
     s: false,
     d: false,
     shift: false,
     space: false,
-    escape: false,
+    escape: false
   });
-
+  
+  // Jump state
+  const jumpState = useRef({
+    isJumping: false,
+    jumpVelocity: 0,
+    groundY: 0
+  });
+  
+  // Movement settings
+  const movementSettings = {
+    moveSpeed: 0.05,
+    sprintSpeed: 0.1,
+    rotationSpeed: 0.02,
+    jumpHeight: 0.5,
+    gravity: 0.015,
+  };
+  
+  // Camera settings
+  const cameraSettings = {
+    start: {
+      position: new THREE.Vector3(2, 3, 1),
+      lookAt: new THREE.Vector3(-0.5, 2.4, 0),
+      fov: 45,
+    },
+    end: {
+      position: new THREE.Vector3(0, 3, 6),
+      offset: new THREE.Vector3(0, 3, 6),
+      fov: 75,
+    },
+  };
+  
+  // Game startup
+  const gameplayLookAtOffset = new THREE.Vector3(0, 2, 0);
+  const startTimeRef = useRef(null);
+  
+  // Setup scene
   useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    // Camera settings from the original code
-    const cameraSettings = {
-      start: {
-        position: new THREE.Vector3(2, 3, 1), // Positioned to the right (+x) while staying close
-        lookAt: new THREE.Vector3(-0.5, 2.4, 0), // Looking slightly left to keep character in frame
-        fov: 45, // Zoomed in FOV for close-up
-      },
-      end: {
-        position: new THREE.Vector3(0, 3, 6), // Centered position
-        offset: new THREE.Vector3(0, 3, 6), // Matching offset
-        fov: 75, // Wider FOV for gameplay
-      },
-    };
-
-    // Add a lookAt target for gameplay that's ahead of the player
-    const gameplayLookAtOffset = new THREE.Vector3(0, 2, 0); // Look further ahead and up
-
-    // Setup scene with black background initially (for fade-in effect)
-    const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x000000); // Start with black
-
-    // Add fog for distance fading with a pastel color
-    const fogColor = new THREE.Color(0xfff0e0); // Warm pastel fog color
-    scene.fog = new THREE.FogExp2(fogColor, 0.01); // Exponential fog for softer distance falloff
-
-    // Create a container for the camera and player
-    const container = new THREE.Object3D();
-    scene.add(container);
-
-    // Set up camera - scene level, not attached to container
-    const camera = new THREE.PerspectiveCamera(
-      cameraSettings.start.fov,
-      window.innerWidth / window.innerHeight,
-      0.1,
-      1000,
-    );
-    cameraRef.current = camera;
-    camera.position.copy(cameraSettings.start.position);
-    scene.add(camera); // Add to scene, not container
-
-    // Enhanced lighting setup with warmer tones
-    const ambientLight = new THREE.AmbientLight(0xf4ccff, 1.0); // Slight purple tint for ambient light
-    scene.add(ambientLight);
-
-    // Add directional light for better shadows and definition
-    const dirLight = new THREE.DirectionalLight(0xffffff, 1.0);
-    dirLight.position.set(5, 5, 5);
-    scene.add(dirLight);
-
-    // Add point light for additional illumination
-    const pointLight = new THREE.PointLight(0xffffff, 1.0);
-    pointLight.position.set(-5, 5, -5);
-    scene.add(pointLight);
-
-    // Setup renderer with toon rendering settings
-    const renderer = new THREE.WebGLRenderer({
-      antialias: true,
-      alpha: true,
-      powerPreference: "low-power",
-    });
-    renderer.setPixelRatio(window.devicePixelRatio);
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.setClearColor(0x000000, 1); // Start with black
-
-    if (containerRef.current) {
-      containerRef.current.appendChild(renderer.domElement);
-    }
-
-    // Setup post-processing
-    const composer = new EffectComposer(renderer);
-    composerRef.current = composer;
-    const renderPass = new RenderPass(scene, camera);
-    composer.addPass(renderPass);
-
-    // Add bloom effect for that dreamy glow
-    const bloomPass = new UnrealBloomPass(
-      new THREE.Vector2(window.innerWidth, window.innerHeight),
-      0.8, // strength
-      0.4, // radius
-      0.85, // threshold
-    );
-    composer.addPass(bloomPass);
-
-    // Add custom pastel shader for vibrant Animal Crossing style
-    const pastelPass = new ShaderPass(PastelVibrantShader);
-    pastelPass.uniforms.saturation.value = 1.2; // Higher for more vibrant colors
-    pastelPass.uniforms.brightness.value = 1; // Slight brightness boost
-    pastelPass.uniforms.pastelAmount.value = 1; // Adjust for more/less pastel effect
-    pastelPass.uniforms.warmth.value = 0.1; // Subtle warm tint
-    pastelPass.uniforms.opacity.value = 0.0; // Start fully transparent
-    pastelPassRef.current = pastelPass;
-
-    // Add as the last pass for best results
-    composer.addPass(pastelPass);
-
-    // Create clouds
-    const clouds = createClouds(scene);
-
-    // Function to animate clouds
-    const animateClouds = () => {
-      clouds.children.forEach((cloudCluster, i) => {
-        // Make clouds slowly drift
-        cloudCluster.position.x +=
-          Math.sin(Date.now() * 0.0001 + i * 0.1) * 0.01;
-        cloudCluster.position.z +=
-          Math.cos(Date.now() * 0.0001 + i * 0.1) * 0.01;
-      });
-    };
-
-    // Loading counter to track all assets
-    let assetsToLoad = 3; // Map, player model, texture
-    let assetsLoaded = 0;
-
-    const checkAllLoaded = () => {
-      assetsLoaded++;
-      if (assetsLoaded === assetsToLoad) {
-        // All assets are loaded, start fade in
-        setIsLoading(false);
-        fadeTimeRef.current = Date.now();
-        scene.background = new THREE.Color(0x88d7ee); // Set sky color
-      }
-    };
-
-    // Create floor plane with Animal Crossing grass color
-    const planeGeometry = new THREE.PlaneGeometry(1000, 1000);
-
-    // Load and configure the texture
-    const textureLoader = new THREE.TextureLoader();
-    const texture = textureLoader.load("/animal-crossing.png", checkAllLoaded);
-    texture.wrapS = THREE.RepeatWrapping;
-    texture.wrapT = THREE.RepeatWrapping;
-    texture.repeat.set(500, 500);
-
-    // Create custom toon material for the ground
-    const groundMaterial = new THREE.MeshToonMaterial({
-      map: texture,
-      gradientMap: createToonGradient(),
-      color: 0x8dc63f, // Brighter, more vibrant grass green
-      side: THREE.DoubleSide,
-      emissive: 0x1a4d1a, // Slight green glow
-      emissiveIntensity: 0.2,
-    });
-
-    const plane = new THREE.Mesh(planeGeometry, groundMaterial);
-    plane.rotation.x = Math.PI / 2;
-    plane.position.y = 0;
-    scene.add(plane);
-
-    // Load map model
-    let mapModel = null;
-    const maploader = new GLTFLoader();
-    maploader.setPath("/models/");
-
-    maploader.load(
-      "sf_map_3.glb",
-      function (gltf) {
-        mapModel = gltf.scene;
-        mapModel.scale.set(3.0, 3.0, 3.0);
-        mapModel.position.set(0.0, -0.01, 0.0);
-        scene.add(gltf.scene);
-
-        // Add toon shading to existing materials
-        mapModel.traverse((child) => {
-          if (child.isMesh) {
-            const originalMaterial = child.material;
-            // Create a new toon material that preserves the original textures
-            const toonMaterial = new THREE.MeshToonMaterial({
-              map: originalMaterial.map,
-              normalMap: originalMaterial.normalMap,
-              gradientMap: createToonGradient(),
-              side: THREE.DoubleSide,
-              color: originalMaterial.color,
-              transparent: originalMaterial.transparent,
-              opacity: originalMaterial.opacity,
-            });
-            child.material = toonMaterial;
-          }
-        });
-        checkAllLoaded();
-      },
-      undefined,
-      function (error) {
-        console.error(error);
-        checkAllLoaded(); // Still count as loaded even if error
-      },
-    );
-
-    // Load player model with materials
-    let playerModel = null;
-    const gltfLoader = new GLTFLoader();
-    gltfLoader.setPath("/models/");
-
-    gltfLoader.load(
-      "player.glb",
-      (gltf) => {
-        playerModel = gltf.scene;
-        playerModel.scale.set(0.027, 0.027, 0.027);
-        playerModel.rotation.y = (Math.PI / 4) * -1; // Rotate to face backward
-
-        // Add toon shading to existing materials
-        playerModel.traverse((child) => {
-          if (child.isMesh) {
-            const originalMaterial = child.material;
-            // Create a new toon material that preserves the original textures
-            const toonMaterial = new THREE.MeshToonMaterial({
-              map: originalMaterial.map,
-              normalMap: originalMaterial.normalMap,
-              gradientMap: createToonGradient(),
-              side: THREE.DoubleSide,
-              color: originalMaterial.color,
-              transparent: originalMaterial.transparent,
-              opacity: originalMaterial.opacity,
-            });
-            child.material = toonMaterial;
-          }
-        });
-
-        // Set up animations
-        if (gltf.animations && gltf.animations.length > 0) {
-          mixerRef.current = new THREE.AnimationMixer(playerModel);
-          animationsRef.current = gltf.animations; // Store animations
-
-          const idleAnimation = animationsRef.current.find((anim) =>
-            anim.name.toLowerCase().includes("idle"),
-          );
-          const runAnimation = animationsRef.current.find((anim) =>
-            anim.name.toLowerCase().includes("run"),
-          );
-
-          if (idleAnimation) {
-            const action = mixerRef.current.clipAction(idleAnimation);
-            action.play();
-            currentActionRef.current = action;
-          }
-        }
-
-        container.add(playerModel);
-        playerRef.current = playerModel;
-        checkAllLoaded();
-      },
-      (xhr) => {
-        console.log((xhr.loaded / xhr.total) * 100 + "% loaded");
-      },
-      (error) => {
-        console.error("An error occurred while loading the model:", error);
-        checkAllLoaded(); // Still count as loaded even if error
-      },
-    );
-
-    // Position container to start at ground level
-    container.position.y = 0; // Place directly on ground
-
-    // Movement settings
-    const movementSettings = {
-      moveSpeed: 0.05,
-      sprintSpeed: 0.1,
-      rotationSpeed: 0.02,
-      jumpHeight: 0.5,
-      gravity: 0.015,
-    };
-
-    // Jump state
-    const jumpState = {
-      isJumping: false,
-      jumpVelocity: 0,
-      groundY: 0, // Changed from -1 to 0 since plane is at y=0
-    };
-
-    // Handle keyboard controls
+    // Set background color - start with a visible color (light blue) instead of black
+    scene.background = new THREE.Color(0x88d7ee);
+    
+    // Add fog with lighter color
+    const fogColor = new THREE.Color(0xfff0e0);
+    scene.fog = new THREE.FogExp2(fogColor, 0.008); // Reduced density
+    
+    // Add container to scene
+    scene.add(containerRef.current);
+    containerRef.current.position.y = 0;
+    
+    // Keyboard event handlers
     const handleKeyDown = (event) => {
       if (!hasEnteredNeighborhood || isLoading) return;
-
+      
       switch (event.key.toLowerCase()) {
         case "w":
-          keysRef.current.w = true;
+          setMoveState(prev => ({ ...prev, w: true }));
           break;
         case "a":
-          keysRef.current.a = true;
+          setMoveState(prev => ({ ...prev, a: true }));
           break;
         case "s":
-          keysRef.current.s = true;
+          setMoveState(prev => ({ ...prev, s: true }));
           break;
         case "d":
-          keysRef.current.d = true;
+          setMoveState(prev => ({ ...prev, d: true }));
           break;
         case "shift":
-          keysRef.current.shift = true;
+          setMoveState(prev => ({ ...prev, shift: true }));
           break;
         case " ":
-          if (!jumpState.isJumping) {
-            jumpState.isJumping = true;
-            jumpState.jumpVelocity = movementSettings.jumpHeight;
+          if (!jumpState.current.isJumping) {
+            jumpState.current.isJumping = true;
+            jumpState.current.jumpVelocity = movementSettings.jumpHeight;
           }
-          keysRef.current.space = true;
+          setMoveState(prev => ({ ...prev, space: true }));
           break;
         case "escape":
-          keysRef.current.escape = true;
+          setMoveState(prev => ({ ...prev, escape: true }));
           setHasEnteredNeighborhood(false);
           break;
       }
     };
-
+    
     const handleKeyUp = (event) => {
       switch (event.key.toLowerCase()) {
         case "w":
-          keysRef.current.w = false;
+          setMoveState(prev => ({ ...prev, w: false }));
           break;
         case "a":
-          keysRef.current.a = false;
+          setMoveState(prev => ({ ...prev, a: false }));
           break;
         case "s":
-          keysRef.current.s = false;
+          setMoveState(prev => ({ ...prev, s: false }));
           break;
         case "d":
-          keysRef.current.d = false;
+          setMoveState(prev => ({ ...prev, d: false }));
           break;
         case "shift":
-          keysRef.current.shift = false;
+          setMoveState(prev => ({ ...prev, shift: false }));
           break;
         case " ":
-          keysRef.current.space = false;
+          setMoveState(prev => ({ ...prev, space: false }));
           break;
         case "escape":
-          keysRef.current.escape = false;
+          setMoveState(prev => ({ ...prev, escape: false }));
           break;
       }
     };
-
-    // Handle window resize
-    const handleResize = () => {
-      camera.aspect = window.innerWidth / window.innerHeight;
-      camera.updateProjectionMatrix();
-      renderer.setSize(window.innerWidth, window.innerHeight);
-      composer.setSize(window.innerWidth, window.innerHeight); // Update composer size too
-    };
-
-    // Animation
-    const animate = (timestamp) => {
-      if (!startTimeRef.current) startTimeRef.current = timestamp;
-      const progress = Math.min((timestamp - startTimeRef.current) / 1000, 1);
-
-      // Handle fade in after loading
-      if (!isLoading && fadeTimeRef.current) {
-        const fadeProgress = Math.min(
-          (Date.now() - fadeTimeRef.current) / 2000,
-          1,
-        );
-
-        if (pastelPassRef.current) {
-          pastelPassRef.current.uniforms.opacity.value = fadeProgress;
-        }
-
-        // Once fade is complete, remove the reference to stop calculating
-        if (fadeProgress === 1) {
-          fadeTimeRef.current = null;
-        }
-      }
-
-      // Update animation mixer
-      if (mixerRef.current && animationsRef.current) {
-        const deltaTime = (timestamp - startTimeRef.current) / 1000;
-        mixerRef.current.update(deltaTime);
-
-        // Check if player is moving (W or S key pressed)
-        const isMoving = keysRef.current.w || keysRef.current.s;
-
-        // Find appropriate animation
-        const idleAnimation = animationsRef.current.find((anim) =>
-          anim.name.toLowerCase().includes("idle"),
-        );
-        const runAnimation = animationsRef.current.find((anim) =>
-          anim.name.toLowerCase().includes("run"),
-        );
-
-        if (
-          isMoving &&
-          runAnimation &&
-          currentActionRef.current?.clip !== runAnimation
-        ) {
-          if (currentActionRef.current) {
-            currentActionRef.current.fadeOut(0.2);
-          }
-          const newAction = mixerRef.current.clipAction(runAnimation);
-          newAction.reset().fadeIn(0.2).play();
-          currentActionRef.current = newAction;
-        } else if (
-          !isMoving &&
-          idleAnimation &&
-          currentActionRef.current?.clip !== idleAnimation
-        ) {
-          if (currentActionRef.current) {
-            currentActionRef.current.fadeOut(0.2);
-          }
-          const newAction = mixerRef.current.clipAction(idleAnimation);
-          newAction.reset().fadeIn(0.2).play();
-          currentActionRef.current = newAction;
-        }
-      }
-
-      // Smooth easing
-      const eased =
-        progress < 0.5
-          ? 4 * progress * progress * progress
-          : 1 - Math.pow(-2 * progress + 2, 3) / 2;
-
-      if (hasEnteredNeighborhood && !isLoading) {
-        // Update container position and rotation based on keys
-        if (playerRef.current) {
-          const { moveSpeed, sprintSpeed, rotationSpeed, gravity } =
-            movementSettings;
-          const cameraOffset = cameraSettings.end.offset;
-
-          // Interpolate FOV
-          camera.fov = THREE.MathUtils.lerp(
-            cameraSettings.start.fov,
-            cameraSettings.end.fov,
-            eased,
-          );
-          camera.updateProjectionMatrix(); // Important: must call this after changing FOV
-
-          // Handle rotation with A and D
-          if (keysRef.current.a) {
-            container.rotation.y += rotationSpeed;
-          }
-          if (keysRef.current.d) {
-            container.rotation.y -= rotationSpeed;
-          }
-
-          // Calculate forward direction based on rotation
-          const forward = new THREE.Vector3(0, 0, 1);
-          forward.applyQuaternion(container.quaternion);
-
-          // Handle forward/backward movement with W and S
-          const currentSpeed = keysRef.current.shift ? sprintSpeed : moveSpeed;
-          if (keysRef.current.w) {
-            container.position.add(forward.multiplyScalar(currentSpeed));
-          }
-          if (keysRef.current.s) {
-            container.position.add(forward.multiplyScalar(-currentSpeed));
-          }
-
-          // Handle jumping
-          if (jumpState.isJumping) {
-            container.position.y += jumpState.jumpVelocity;
-            jumpState.jumpVelocity -= gravity;
-
-            // Check if landed (accounting for cube height)
-            if (container.position.y <= jumpState.groundY) {
-              container.position.y = jumpState.groundY;
-              jumpState.isJumping = false;
-              jumpState.jumpVelocity = 0;
-            }
-          }
-
-          // Update camera position relative to container - using exact logic from old code
-          if (progress === 1) {
-            // Position camera behind player based on container's rotation
-            const cameraAngle = container.rotation.y;
-            const distance = 6;
-            const height = 3;
-
-            // Position camera directly behind player
-            camera.position.set(
-              container.position.x - Math.sin(cameraAngle) * distance,
-              container.position.y + height,
-              container.position.z - Math.cos(cameraAngle) * distance,
-            );
-
-            // Look ahead of player
-            const lookAtTarget = new THREE.Vector3(
-              container.position.x +
-                Math.sin(cameraAngle) * gameplayLookAtOffset.z,
-              container.position.y + gameplayLookAtOffset.y,
-              container.position.z +
-                Math.cos(cameraAngle) * gameplayLookAtOffset.z,
-            );
-            camera.lookAt(lookAtTarget);
-          } else {
-            // During transition
-            const currentPosition = new THREE.Vector3();
-            currentPosition.lerpVectors(
-              cameraSettings.start.position,
-              new THREE.Vector3(
-                container.position.x - Math.sin(container.rotation.y) * 4,
-                container.position.y + 4, // Match the new height
-                container.position.z - Math.cos(container.rotation.y) * 4,
-              ),
-              eased,
-            );
-            camera.position.copy(currentPosition);
-
-            // Smoothly transition the look target
-            const startLookAt = cameraSettings.start.lookAt;
-            const endLookAt = new THREE.Vector3(
-              container.position.x,
-              container.position.y + 0.5, // Match the new look target
-              container.position.z,
-            );
-            const currentLookAt = new THREE.Vector3();
-            currentLookAt.lerpVectors(startLookAt, endLookAt, eased);
-            camera.lookAt(currentLookAt);
-          }
-        }
-      } else {
-        // Reset player and camera positions when exiting
-        if (playerRef.current) {
-          playerRef.current.position.set(0, 0, 0);
-        }
-
-        if (container) {
-          container.position.set(0, 1.0, 0);
-          container.rotation.set(0, 0, 0);
-        }
-
-        // Transition camera back to starting position - using logic from old code
-        const currentPosition = new THREE.Vector3();
-        currentPosition.lerpVectors(
-          new THREE.Vector3(
-            -Math.sin(container.rotation.y) * 4,
-            4, // Updated height
-            -Math.cos(container.rotation.y) * 4,
-          ),
-          cameraSettings.start.position,
-          eased,
-        );
-        camera.position.copy(currentPosition);
-
-        // Transition look target
-        const currentLookAt = new THREE.Vector3();
-        currentLookAt.lerpVectors(
-          new THREE.Vector3(0, 0.5, 0), // Updated target height
-          cameraSettings.start.lookAt,
-          eased,
-        );
-        camera.lookAt(currentLookAt);
-      }
-
-      // Animate clouds
-      animateClouds();
-
-      // Render using composer instead of renderer to apply all post-processing effects
-      composer.render();
-
-      animationRef.current = requestAnimationFrame(animate);
-    };
-
-    // Add event listeners
-    window.addEventListener("resize", handleResize);
+    
     window.addEventListener("keydown", handleKeyDown);
     window.addEventListener("keyup", handleKeyUp);
-
-    // Start animation
-    startTimeRef.current = null;
-    if (animationRef.current) {
-      cancelAnimationFrame(animationRef.current);
-    }
-    animationRef.current = requestAnimationFrame(animate);
-
-    // Cleanup
+    
     return () => {
-      window.removeEventListener("resize", handleResize);
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("keyup", handleKeyUp);
-
-      if (animationRef.current) {
-        cancelAnimationFrame(animationRef.current);
-      }
-      if (mixerRef.current) {
-        mixerRef.current.stopAllAction();
-      }
-      if (containerRef.current && renderer.domElement) {
-        containerRef.current.removeChild(renderer.domElement);
-      }
-      if (playerModel) {
-        playerModel.traverse((child) => {
-          if (child.isMesh) {
-            child.geometry.dispose();
-            if (Array.isArray(child.material)) {
-              child.material.forEach((material) => material.dispose());
-            } else {
-              child.material.dispose();
-            }
-          }
-        });
-      }
-      scene.remove(plane);
-      plane.geometry.dispose();
-      plane.material.dispose();
-      renderer.dispose();
-      composer.dispose(); // Properly dispose composer
+      scene.remove(containerRef.current);
     };
-  }, [hasEnteredNeighborhood, isLoading]);
+  }, [scene, hasEnteredNeighborhood, isLoading, setIsLoading, setHasEnteredNeighborhood]);
+  
+  // Handle movement and camera updates
+  useFrame((_, delta) => {
+    if (!startTimeRef.current) startTimeRef.current = Date.now();
+    const elapsedTime = (Date.now() - startTimeRef.current) / 1000;
+    const progress = Math.min(elapsedTime, 1);
+    
+    // Smooth easing
+    const eased = progress < 0.5
+      ? 4 * progress * progress * progress
+      : 1 - Math.pow(-2 * progress + 2, 3) / 2;
+    
+    if (hasEnteredNeighborhood && !isLoading) {
+      const { moveSpeed, sprintSpeed, rotationSpeed, gravity } = movementSettings;
+      
+      // Interpolate FOV
+      camera.fov = THREE.MathUtils.lerp(
+        cameraSettings.start.fov,
+        cameraSettings.end.fov,
+        eased
+      );
+      camera.updateProjectionMatrix();
+      
+      // Handle rotation
+      if (moveState.a) {
+        containerRef.current.rotation.y += rotationSpeed;
+      }
+      if (moveState.d) {
+        containerRef.current.rotation.y -= rotationSpeed;
+      }
+      
+      // Calculate forward direction
+      const forward = new THREE.Vector3(0, 0, 1);
+      forward.applyQuaternion(containerRef.current.quaternion);
+      
+      // Handle movement
+      const currentSpeed = moveState.shift ? sprintSpeed : moveSpeed;
+      if (moveState.w) {
+        containerRef.current.position.add(forward.clone().multiplyScalar(currentSpeed));
+      }
+      if (moveState.s) {
+        containerRef.current.position.add(forward.clone().multiplyScalar(-currentSpeed));
+      }
+      
+      // Handle jumping
+      if (jumpState.current.isJumping) {
+        containerRef.current.position.y += jumpState.current.jumpVelocity;
+        jumpState.current.jumpVelocity -= gravity;
+        
+        if (containerRef.current.position.y <= jumpState.current.groundY) {
+          containerRef.current.position.y = jumpState.current.groundY;
+          jumpState.current.isJumping = false;
+          jumpState.current.jumpVelocity = 0;
+        }
+      }
+      
+      // Update camera position
+      if (progress === 1) {
+        const cameraAngle = containerRef.current.rotation.y;
+        const distance = 6;
+        const height = 3;
+        
+        camera.position.set(
+          containerRef.current.position.x - Math.sin(cameraAngle) * distance,
+          containerRef.current.position.y + height,
+          containerRef.current.position.z - Math.cos(cameraAngle) * distance
+        );
+        
+        const lookAtTarget = new THREE.Vector3(
+          containerRef.current.position.x + Math.sin(cameraAngle) * gameplayLookAtOffset.z,
+          containerRef.current.position.y + gameplayLookAtOffset.y,
+          containerRef.current.position.z + Math.cos(cameraAngle) * gameplayLookAtOffset.z
+        );
+        camera.lookAt(lookAtTarget);
+      } else {
+        // During transition
+        const currentPosition = new THREE.Vector3();
+        currentPosition.lerpVectors(
+          cameraSettings.start.position,
+          new THREE.Vector3(
+            containerRef.current.position.x - Math.sin(containerRef.current.rotation.y) * 4,
+            containerRef.current.position.y + 4,
+            containerRef.current.position.z - Math.cos(containerRef.current.rotation.y) * 4
+          ),
+          eased
+        );
+        camera.position.copy(currentPosition);
+        
+        const startLookAt = cameraSettings.start.lookAt;
+        const endLookAt = new THREE.Vector3(
+          containerRef.current.position.x,
+          containerRef.current.position.y + 0.5,
+          containerRef.current.position.z
+        );
+        const currentLookAt = new THREE.Vector3();
+        currentLookAt.lerpVectors(startLookAt, endLookAt, eased);
+        camera.lookAt(currentLookAt);
+      }
+    } else {
+      // Reset positions when exiting
+      if (containerRef.current) {
+        containerRef.current.position.set(0, 1.0, 0);
+        containerRef.current.rotation.set(0, 0, 0);
+      }
+      
+      // Transition camera back
+      const currentPosition = new THREE.Vector3();
+      currentPosition.lerpVectors(
+        new THREE.Vector3(
+          -Math.sin(containerRef.current.rotation.y) * 4,
+          4,
+          -Math.cos(containerRef.current.rotation.y) * 4
+        ),
+        cameraSettings.start.position,
+        eased
+      );
+      camera.position.copy(currentPosition);
+      
+      const currentLookAt = new THREE.Vector3();
+      currentLookAt.lerpVectors(
+        new THREE.Vector3(0, 0.5, 0),
+        cameraSettings.start.lookAt,
+        eased
+      );
+      camera.lookAt(currentLookAt);
+    }
+  });
+  
+  // Asset loading state tracking
+  const [assetsLoaded, setAssetsLoaded] = useState({ texture: false, map: false, player: false });
+  
+  useEffect(() => {
+    if (assetsLoaded.texture && assetsLoaded.map && assetsLoaded.player && isLoading) {
+      setIsLoading(false);
+      fadeTimeRef.current = Date.now();
+    }
+  }, [assetsLoaded, isLoading, setIsLoading]);
+  
+  // Debug - log movement state changes
+  useEffect(() => {
+    console.log("Movement state updated:", moveState);
+  }, [moveState]);
+  
+  return (
+    <>
+      {/* Scene lights - balanced intensity */}
+      <ambientLight color={0xf4ccff} intensity={1.2} /> {/* increased from 1.0 */}
+      <directionalLight position={[5, 5, 5]} intensity={1.1} /> {/* increased from 1.0 */}
+      <pointLight position={[-5, 5, -5]} intensity={0.5} /> {/* added back but with lower intensity */}
+      
+      {/* Clouds */}
+      <Clouds />
+      
+      {/* Ground */}
+      <Ground onLoad={() => setAssetsLoaded(prev => ({ ...prev, texture: true }))} />
+      
+      {/* Map */}
+      <MapModel onLoad={() => setAssetsLoaded(prev => ({ ...prev, map: true }))} />
+      
+      {/* Player model */}
+      <PlayerModel 
+        containerRef={containerRef} 
+        moveState={moveState}
+        onLoad={() => setAssetsLoaded(prev => ({ ...prev, player: true }))}
+      />
+      
+      {/* Post-processing effects */}
+      <Effects isLoading={isLoading} fadeTimeRef={fadeTimeRef} />
+    </>
+  );
+}
 
+export default function NeighborhoodEnvironment({
+  hasEnteredNeighborhood,
+  setHasEnteredNeighborhood,
+}) {
+  const [isLoading, setIsLoading] = useState(true);
+  
   return (
     <div
-      ref={containerRef}
       style={{
         position: "fixed",
         top: 0,
@@ -796,6 +790,34 @@ export default function NeighborhoodEnvironment({
         zIndex: -1,
       }}
     >
+      <Canvas
+        camera={{
+          fov: 45,
+          near: 0.1,
+          far: 1000,
+          position: [2, 3, 1]
+        }}
+        gl={{
+          antialias: true,
+          alpha: true,
+          powerPreference: "high-performance",
+          outputEncoding: THREE.sRGBEncoding,
+          precision: "mediump" // medium precision for better balance
+        }}
+        dpr={[0.9, 1.75]} // adjusted for better balance
+        shadows={false}
+      >
+        {/* Camera controls initial look target */}
+        <CameraController />
+        
+        <Scene 
+          hasEnteredNeighborhood={hasEnteredNeighborhood}
+          setHasEnteredNeighborhood={setHasEnteredNeighborhood}
+          isLoading={isLoading}
+          setIsLoading={setIsLoading}
+        />
+      </Canvas>
+      
       {isLoading && (
         <div
           style={{
@@ -807,8 +829,19 @@ export default function NeighborhoodEnvironment({
             fontSize: "16px",
             textAlign: "center",
           }}
-        ></div>
+        >Loading...</div>
       )}
     </div>
   );
 }
+// Camera controller component to set initial look target
+function CameraController() {
+  const { camera } = useThree();
+  
+  useEffect(() => {
+    camera.lookAt(-0.5, 2.4, 0);
+  }, [camera]);
+  
+  return null;
+}
+
