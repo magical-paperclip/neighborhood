@@ -2454,7 +2454,7 @@ const HackTimeComponent = ({ isExiting, onClose, userData }) => {
                   fontSize: "14px",
                 }}
               >
-                cancel
+                Cancel
               </button>
               <button
                 style={{
@@ -2545,6 +2545,7 @@ const HackTimeComponent = ({ isExiting, onClose, userData }) => {
 
                       setEmailChangeValid(false);
                       setEmail("");
+
                       setOtp("");
                       setIsSettingEmail(false);
                     }}
