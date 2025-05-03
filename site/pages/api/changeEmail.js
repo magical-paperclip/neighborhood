@@ -20,12 +20,13 @@ export default async function handler(req, res) {
     return res.status(405).json({ message: "Method not allowed" });
   }
 
-  const { email, otp } = req.body;
+  const { email, otp, token } = req.body;
 
-  if (!email || !otp) {
+  if (!email || !otp || !token) {
     console.log("email and otp are required");
     console.log("email", email);
     console.log("otp", otp);
+    console.log("token", token);
     return res.status(400).json({ message: "Email and OTP are required" });
   }
 
@@ -81,7 +82,7 @@ export default async function handler(req, res) {
     // Get user's token from the main table
     const userRecords = await base(process.env.AIRTABLE_TABLE_ID)
       .select({
-        filterByFormula: `{email} = '${email}'`,
+        filterByFormula: `{token} = '${token}'`,
         maxRecords: 1,
       })
       .firstPage();
@@ -90,6 +91,16 @@ export default async function handler(req, res) {
       console.log("User not found for email:", email);
       return res.status(404).json({ message: "User not found" });
     }
+
+    // Set new email
+    await base(process.env.AIRTABLE_TABLE_ID).update([
+      {
+        id: userRecords[0].id,
+        fields: {
+          email: email,
+        },
+      },
+    ]);
 
     return res.status(200).json({
       message: "OTP verified successfully",

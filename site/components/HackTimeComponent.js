@@ -31,6 +31,18 @@ const HackTimeComponent = ({ isExiting, onClose, userData }) => {
   const [stopwatchView, setStopwatchView] = useState("stopwatch"); // Default to "stopwatch"
   const [isStopwatchExiting, setIsStopwatchExiting] = useState(false);
   const [isStopwatchHurt, setIsStopwatchHurt] = useState(false);
+  const [isSettingEmail, setIsSettingEmail] = useState(false);
+  const [emailCode, setEmailCode] = useState("");
+  const [alertModal, setAlertModal] = useState({
+    show: false,
+    message: "",
+    title: "",
+    onConfirm: () => {},
+    onCancel: () => {},
+    isConfirm: false,
+  });
+  const [emailChangeValid, setEmailChangeValid] = useState(false);
+  const [email, setEmail] = useState("");
 
   // Add debounce helper at the top level of the component
   const debounce = (func, wait) => {
@@ -377,6 +389,203 @@ const HackTimeComponent = ({ isExiting, onClose, userData }) => {
       setStopwatchView("stopwatch");
       setIsStopwatchExiting(false);
     }, 300);
+  };
+
+  const isValidEmail = async (email) => {
+    // Regular expression for basic email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+    if (emailRegex.test(email)) {
+      // Check if email is linked to another neighborhood account
+      const response = await fetch("/api/isAccountLinked", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email,
+        }),
+      });
+
+      if (!response.ok) {
+        console.log("Account not linked ===========================");
+        return true;
+      } else {
+        console.log("Account linked ===========================");
+        return false;
+      }
+    } else {
+      return false;
+    }
+  };
+
+  const CustomModal = () => {
+    if (!alertModal.show) return null;
+
+    const handleConfirm = () => {
+      const confirmCallback = alertModal.onConfirm;
+      setAlertModal((prev) => ({ ...prev, show: false }));
+      if (confirmCallback) confirmCallback();
+    };
+
+    const handleCancel = () => {
+      const cancelCallback = alertModal.onCancel;
+      setAlertModal((prev) => ({ ...prev, show: false }));
+      if (cancelCallback) cancelCallback();
+    };
+
+    // Handle backdrop click - only close if clicking outside modal content
+    const handleBackdropClick = (e) => {
+      if (e.target === e.currentTarget) {
+        handleCancel();
+      }
+    };
+
+    return (
+      <div
+        style={{
+          position: "fixed",
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: "rgba(0,0,0,0.5)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          zIndex: 1500,
+        }}
+        onClick={handleBackdropClick}
+      >
+        <div
+          style={{
+            backgroundColor: "white",
+            padding: "24px",
+            borderRadius: "8px",
+            width: "400px",
+            boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Rest of the modal content remains the same */}
+          <h3
+            style={{
+              margin: "0 0 8px 0",
+              color: "#ef758a",
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+            }}
+          >
+            <span style={{ fontSize: "20px" }}>
+              {alertModal.isConfirm ? "❓" : "ℹ️"}
+            </span>
+            {alertModal.title || "Notice"}
+          </h3>
+          <p
+            style={{
+              margin: "0 0 16px 0",
+              color: "#666",
+              fontSize: "14px",
+            }}
+          >
+            {alertModal.message}
+          </p>
+
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "flex-end",
+              gap: "8px",
+            }}
+          >
+            {alertModal.isConfirm && (
+              <button
+                type="button"
+                onClick={handleCancel}
+                style={{
+                  padding: "8px 16px",
+                  border: "1px solid #ddd",
+                  borderRadius: "4px",
+                  backgroundColor: "pink",
+                  color: "black",
+                  cursor: "pointer",
+                  fontSize: "14px",
+                }}
+              >
+                Cancel
+              </button>
+            )}
+            <button
+              onClick={handleConfirm}
+              style={{
+                padding: "8px 16px",
+                border: "none",
+                borderRadius: "4px",
+                backgroundColor: "#ef758a",
+                color: "white",
+                cursor: "pointer",
+                fontSize: "14px",
+                fontWeight: "500",
+              }}
+            >
+              {alertModal.isConfirm ? "Confirm" : "OK"}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const showAlert = (message, title = "Notice", onConfirm = () => {}) => {
+    setAlertModal({
+      show: true,
+      message,
+      title,
+      onConfirm,
+      onCancel: () => {},
+      isConfirm: false,
+    });
+  };
+
+  const showConfirm = (
+    message,
+    title = "Confirm",
+    onConfirm = () => {},
+    onCancel = () => {},
+  ) => {
+    setAlertModal({
+      show: true,
+      message,
+      title,
+      onConfirm,
+      onCancel,
+      isConfirm: true,
+    });
+  };
+
+  const handleChangeEmail = async () => {
+    // Make this function async
+    console.log("handleChangeEmail");
+    const emailValid = await isValidEmail(email); // Wait for the result
+
+    if (!emailValid) {
+      showAlert(
+        "Please enter a valid email address or one not linked to another neighborhood account",
+      );
+      return;
+    } else {
+      setEmailChangeValid(true);
+      await fetch("/api/getOtp", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email,
+        }),
+      });
+    }
   };
 
   const handleProjectAdded = (newProject) => {
@@ -1403,7 +1612,7 @@ const HackTimeComponent = ({ isExiting, onClose, userData }) => {
         transform: translateY(-6px) rotate(-2deg);
       }
       75% {
-        transform: translateY(-6px) rotate(2deg);
+        transform: twranslateY(-6px) rotate(2deg);
       }
     }
 
@@ -2000,7 +2209,36 @@ const HackTimeComponent = ({ isExiting, onClose, userData }) => {
                   <br />
                   If you get confused, pls send me an email thomas@hackclub.com
                   and I'd be happy to help you get it working.
+                  <br />
+                  <br />
+                  <br />
+                  <br />
+                  PS : This could also be due to the fact that you signed up
+                  with another email than your slack account. Use the button
+                  below to change it, and enter your slack email adress this
+                  time :)
                 </p>
+
+                <button
+                  style={{
+                    padding: "8px 16px",
+                    border: "none",
+                    borderRadius: "4px",
+                    backgroundColor: "#ef758a",
+                    color: "white",
+                    cursor: "pointer",
+                    fontSize: "20px",
+                    fontWeight: "500",
+                    marginTop: 16,
+                  }}
+                  onClick={() => {
+                    setIsSettingEmail(true);
+                    setEmailCode("");
+                    setEmailChangeValid(false);
+                  }}
+                >
+                  Change my email
+                </button>
               </div>
             )}
           </div>
@@ -2125,6 +2363,202 @@ const HackTimeComponent = ({ isExiting, onClose, userData }) => {
           </div>
         </div>
       )}
+      {isSettingEmail && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: "rgba(0,0,0,0.5)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1000,
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: "white",
+              padding: "24px",
+              borderRadius: "8px",
+              width: "400px",
+              boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+            }}
+          >
+            <h3
+              style={{
+                margin: "0 0 8px 0",
+                color: "#ef758a",
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+              }}
+            >
+              <span style={{ fontSize: "20px" }}>📧</span>
+              Change your email
+            </h3>
+
+            <div style={{ marginBottom: "16px" }}>
+              <label
+                style={{
+                  display: "block",
+                  marginBottom: "8px",
+                  color: "#333",
+                  fontWeight: "500",
+                  fontSize: "14px",
+                }}
+              >
+                What's your slack email?
+              </label>
+              <input
+                type="text"
+                value={email}
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  setEmailChangeValid(false);
+                }}
+                placeholder="thomas@hackclub.com"
+                style={{
+                  width: "100%",
+                  padding: "12px",
+                  border: "1px solid #ddd",
+                  borderRadius: "4px",
+                  fontSize: "14px",
+                  resize: "vertical",
+                  // Only accept email addresses
+                }}
+              />
+            </div>
+
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "flex-end",
+                gap: "8px",
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => {
+                  setIsSettingEmail(false);
+                }}
+                style={{
+                  padding: "8px 16px",
+                  border: "1px solid #ddd",
+                  borderRadius: "4px",
+                  backgroundColor: "pink",
+                  color: "black",
+                  cursor: "pointer",
+                  fontSize: "14px",
+                }}
+              >
+                cancel
+              </button>
+              <button
+                style={{
+                  padding: "8px 16px",
+                  border: "none",
+                  borderRadius: "4px",
+                  backgroundColor: "#ef758a",
+                  color: "white",
+                  cursor: "pointer",
+                  fontSize: "14px",
+                  fontWeight: "500",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+                onClick={() => {
+                  handleChangeEmail();
+                }}
+              >
+                Update my email
+              </button>
+            </div>
+            {emailChangeValid && (
+              <>
+                <p
+                  style={{
+                    paddingTop: "16px",
+                  }}
+                >
+                  Enter the code you received in the confirmation email to{" "}
+                  {email}
+                </p>
+                <input
+                  type="text"
+                  value={emailCode}
+                  onChange={(e) => {
+                    setEmailCode(e.target.value);
+                  }}
+                  placeholder="123456"
+                  style={{
+                    marginTop: "8px",
+                    width: "100%",
+                    padding: "12px",
+                    border: "1px solid #ddd",
+                    borderRadius: "4px",
+                    fontSize: "14px",
+                    resize: "vertical",
+                  }}
+                />
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "flex-end",
+                    marginTop: "16px",
+                    gap: "8px",
+                  }}
+                >
+                  <button
+                    style={{
+                      padding: "8px 16px",
+                      border: "none",
+                      borderRadius: "4px",
+                      backgroundColor: "#ef758a",
+                      color: "white",
+                      cursor: "pointer",
+                      fontSize: "14px",
+                      fontWeight: "500",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                    onClick={async () => {
+                      const response = await fetch("/api/changeEmail", {
+                        method: "POST",
+                        headers: {
+                          "Content-Type": "application/json",
+                        },
+                        body: JSON.stringify({
+                          email,
+                          otp: emailCode,
+                          token: await getToken(),
+                        }),
+                      });
+
+                      if (!response.ok) {
+                        throw new Error("Failed to verify OTP");
+                      }
+
+                      setEmailChangeValid(false);
+                      setEmail("");
+                      setOtp("");
+                      setIsSettingEmail(false);
+                    }}
+                  >
+                    Verify code & update my email
+                  </button>
+                </div>
+              </>
+            )}
+            <p></p>
+          </div>
+        </div>
+      )}
+      <CustomModal />
     </div>
   );
 };
