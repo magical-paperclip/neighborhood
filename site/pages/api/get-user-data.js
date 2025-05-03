@@ -61,23 +61,44 @@ export default async function handler(req, res) {
     let image_72 = userProfilePicture;
     let display_name = userName;
 
-    try {
-      users = await web.users.lookupByEmail({
-        email: userEmail
-      });
-      if (users.ok && users.user) {
-        const { profile, id } = users.user;
-        slack_id = id;
-        real_name = profile.real_name || real_name;
-        image_72 = profile.image_72 || image_72;
-        display_name = profile.display_name || display_name;
+    // Check if user already has Slack information in Airtable
+    const existingSlackRecords = await base("#neighborhoodSlackMembers")
+      .select({
+        filterByFormula: `{Email} = '${userEmail}'`,
+        maxRecords: 1
+      })
+      .firstPage();
+
+    const hasExistingSlackInfo = existingSlackRecords.length > 0 && 
+      existingSlackRecords[0].fields['Slack ID'] && 
+      existingSlackRecords[0].fields['Slack Handle'];
+
+    // Only try to update Slack info if user doesn't have existing Slack information
+    if (!hasExistingSlackInfo) {
+      try {
+        users = await web.users.lookupByEmail({
+          email: userEmail
+        });
+        if (users.ok && users.user) {
+          const { profile, id } = users.user;
+          slack_id = id;
+          real_name = profile.real_name || real_name;
+          image_72 = profile.image_72 || image_72;
+          display_name = profile.display_name || display_name;
+        }
+      } catch (error) {
+        if (error.data?.error === 'users_not_found') {
+          // User not found in workspace, continuing without Slack integration
+        } else {
+          throw error;
+        }
       }
-    } catch (error) {
-      if (error.data?.error === 'users_not_found') {
-        // User not found in workspace, continuing without Slack integration
-      } else {
-        throw error;
-      }
+    } else {
+      // Use existing Slack information
+      slack_id = existingSlackRecords[0].fields['Slack ID'];
+      display_name = existingSlackRecords[0].fields['Slack Handle'];
+      real_name = existingSlackRecords[0].fields['Full Name'] || real_name;
+      image_72 = existingSlackRecords[0].fields['Pfp']?.[0]?.url || image_72;
     }
 
     // Now find and join the channel

@@ -27,6 +27,30 @@ export default function Home() {
   const [weatherTexture, setWeatherTexture] = useState("sunny.svg");
   const [currentTime, setCurrentTime] = useState("");
   const [isAM, setIsAM] = useState(false);
+  const [profileDropdown, setProfileDropdown] = useState(false);
+  const [connectingSlack, setConnectingSlack] = useState(false);
+  const [slackUsers, setSlackUsers] = useState([]);
+  const [searchSlack, setSearchSlack] = useState("");
+
+  // Handle clicks outside profile dropdown
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      const dropdown = document.getElementById('profile-dropdown');
+      const profileImage = document.getElementById('profile-image');
+      
+      if (dropdown && profileImage && 
+          !dropdown.contains(event.target) && 
+          !profileImage.contains(event.target)) {
+        setProfileDropdown(false);
+        setConnectingSlack(false)
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
 
   // Update time in Animal Crossing format
   useEffect(() => {
@@ -182,6 +206,26 @@ export default function Home() {
     // { id: 'rewards', text: 'Rewards' }
   ];
 
+  // Fetch Slack users when connectingSlack becomes true
+  useEffect(() => {
+    if (connectingSlack) {
+      fetch('/api/getSlackUsers')
+        .then(res => res.json())
+        .then(data => setSlackUsers(data.users || []))
+        .catch(() => setSlackUsers([]));
+    }
+  }, [connectingSlack]);
+
+  // Deduplicate Slack users by Slack ID
+  const uniqueSlackUsers = [];
+  const seenSlackIds = new Set();
+  for (const user of slackUsers) {
+    if (user.slackId && !seenSlackIds.has(user.slackId)) {
+      uniqueSlackUsers.push(user);
+      seenSlackIds.add(user.slackId);
+    }
+  }
+
   return (
     <>
       <Head>
@@ -261,11 +305,148 @@ export default function Home() {
             >
               <div style={{ position: "absolute", right: 16, top: 16 }}>
                 {!hasEnteredNeighborhood && (
-                  <img
-                    style={{ width: 32, height: 32, cursor: "pointer" }}
-                    src="logout.svg"
-                    onClick={handleLogout}
+                  // <img
+                  //   style={{ width: 32, height: 32, cursor: "pointer" }}
+                  //   src="logout.svg"
+                  //   onClick={handleLogout}
+                  // />
+                  <div>
+                    <img
+                    id="profile-image"
+                    style={{width: 42, border: "1px solid #B5B5B5", backgroundColor: "#B5B5B5", borderRadius: 8, height: 42, cursor: "pointer"}}
+                    src={userData?.profilePicture}
+                    onClick={() => setProfileDropdown(true)}
                   />
+                  {profileDropdown && 
+                  <div id="profile-dropdown" style={{position: "absolute", display: "flex", flexDirection: "column", gap: 8, width: 240, top: 48, right: 0, padding: 8, borderRadius: 8, backgroundColor: "#fff", zIndex: 2,}}>
+                    <div style={{display: "flex", border: "1px solid #B5B5B5", borderRadius: 8, alignItems: "center", flexDirection: "row", gap: 8, padding: 8, minHeight: 40}}>
+                      {userData?.slackHandle ? (
+                        <>
+                          <img
+                            style={{width: 24, border: "1px solid #B5B5B5", backgroundColor: "#B5B5B5", borderRadius: 8, height: 24, cursor: "pointer"}}
+                            src={userData?.profilePicture}
+                            onClick={() => setProfileDropdown(true)}
+                          />
+                          <p style={{fontSize: 14}}>@{userData?.slackHandle}</p>
+                        </>
+                      ) : (
+                        <span style={{fontSize: 14, color: '#b77', display: 'flex', alignItems: 'center', gap: 6}}>
+                          <span role="img" aria-label="warning">⚠️</span>
+                          We're not finding a slack profile attached to your account. Make sure you're using the same email as your slack account
+                        </span>
+                      )}
+                    </div>                    
+                    {/* {!connectingSlack ?
+                    <button
+                     style={{backgroundColor: "#fff", cursor: "pointer", border: "1px solid #000", padding: 6, borderRadius: 6}}
+                     onClick={() => setConnectingSlack(true)}
+                    >Connect Slack</button> :
+                    <div style={{width: '100%', marginBottom: 8}}>
+                      <input
+                        type="text"
+                        value={searchSlack}
+                        onChange={e => setSearchSlack(e.target.value.replace(/@/g, ""))}
+                        placeholder="Search Slack handle"
+                        style={{width: '100%', padding: 8, borderRadius: 6, border: '1px solid #ccc', marginBottom: 8, fontSize: 14}}
+                      />
+                      {searchSlack.length > 0 && (
+                        <div style={{maxHeight: 200, overflowY: 'auto', border: '1px solid #eee', borderRadius: 6, background: '#fafafa'}}>
+                          {uniqueSlackUsers.length === 0 ? (
+                            <div style={{padding: 12, textAlign: 'center', color: '#888'}}>Loading Slack users...</div>
+                          ) : (
+                            uniqueSlackUsers
+                              .filter(user => {
+                                if (!user.slackHandle || user.slackHandle.trim() === "") return false;
+                                const handle = (user.slackHandle || '').toLowerCase();
+                                const name = (user.fullName || '').toLowerCase();
+                                const search = (searchSlack || '').toLowerCase();
+                                return handle.includes(search) || name.includes(search);
+                              })
+                              .sort((a, b) => {
+                                const handleA = (a.slackHandle || '').toLowerCase();
+                                const nameA = (a.fullName || '').toLowerCase();
+                                const handleB = (b.slackHandle || '').toLowerCase();
+                                const nameB = (b.fullName || '').toLowerCase();
+                                const search = (searchSlack || '').toLowerCase();
+                                // Prioritize startsWith, then includes
+                                const aStarts = handleA.startsWith(search) || nameA.startsWith(search);
+                                const bStarts = handleB.startsWith(search) || nameB.startsWith(search);
+                                if (aStarts && !bStarts) return -1;
+                                if (!aStarts && bStarts) return 1;
+                                // If both or neither start, sort alphabetically by handle
+                                return handleA.localeCompare(handleB);
+                              })
+                              .slice(0, 10)
+                              .map(user => {
+                                const displayHandle = user.slackHandle?.startsWith('@') ? user.slackHandle.slice(1) : user.slackHandle;
+                                return (
+                                  <div
+                                    key={user.slackId}
+                                    style={{
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      gap: 8,
+                                      padding: 8,
+                                      cursor: 'pointer',
+                                      borderBottom: '1px solid #eee'
+                                    }}
+                                    onClick={async () => {
+                                      // Get token from localStorage if not already in state
+                                      const token = window.localStorage.getItem('neighborhoodToken');
+                                      const res = await fetch('/api/connectSlack', {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({
+                                          token,
+                                          slackId: user.slackId,
+                                          slackHandle: user.slackHandle,
+                                          fullName: user.fullName,
+                                          pfp: user.pfp
+                                        })
+                                      });
+                                      if (res.ok) {
+                                        // Update UI: set userData, close dropdown, etc.
+                                        setUserData(prev => ({
+                                          ...prev,
+                                          slackHandle: user.slackHandle,
+                                          profilePicture: user.pfp,
+                                          fullName: user.fullName,
+                                          slackId: user.slackId
+                                        }));
+                                        setConnectingSlack(false);
+                                        setProfileDropdown(false);
+                                      } else {
+                                        // Optionally handle error
+                                        alert('Failed to link Slack account');
+                                      }
+                                    }}
+                                  >
+                                    {user.pfp ? (
+                                      <img src={user.pfp} alt={user.slackHandle} style={{width: 28, height: 28, borderRadius: 6, border: '1px solid #ccc', background: '#eee'}} />
+                                    ) : (
+                                      <div style={{width: 28, height: 28, borderRadius: 6, background: '#000', border: '1px solid #ccc'}} />
+                                    )}
+                                    <div>
+                                      <div style={{fontWeight: 'bold', fontSize: 14}}>@{displayHandle}</div>
+                                      <div style={{fontSize: 12, color: '#666'}}>{user.fullName}</div>
+                                    </div>
+                                  </div>
+                                );
+                              })
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    } */}
+
+                    <button 
+                    style={{backgroundColor: "#000", cursor: "pointer", color: "#fff", border: "1px solid #000", padding: 6, borderRadius: 6}}
+                    onClick={() => {
+                      setProfileDropdown(false)
+                      handleLogout()
+                    }}>Logout</button>                    
+                  </div>}
+                  </div>
                 )}
               </div>
 
