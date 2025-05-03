@@ -327,7 +327,11 @@ export default function Home() {
                             src={userData?.profilePicture}
                             onClick={() => setProfileDropdown(true)}
                           />
+                          <div>
                           <p style={{fontSize: 14}}>@{userData?.slackHandle}</p>
+                          <p style={{fontSize: 8}}>Slack ID: {userData?.slackId}</p>
+                          </div>
+
                         </>
                       ) : (
                         <span style={{fontSize: 14, color: '#b77', display: 'flex', alignItems: 'center', gap: 6}}>
