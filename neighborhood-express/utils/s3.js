@@ -20,7 +20,7 @@ const s3 = new AWS.S3();
 // Function to upload a file to S3
 export async function uploadToS3(buffer, key, contentType) {
   const params = {
-    Bucket: process.env.AWS_S3_BUCKET,
+    Bucket: process.env.S3_BUCKET_NAME,
     Key: key,
     Body: buffer,
     ContentType: contentType,

@@ -37,7 +37,7 @@ export async function uploadVideo(req, res) {
     const file = Array.isArray(files.file) ? files.file[0] : files.file;
 
     const fileBuffer = fs.readFileSync(file.filepath);
-    const s3Key = `uploads/${Date.now()}-${file.originalFilename}`;
+    const s3Key = `omg-moments/${Date.now()}-${file.originalFilename}`;
     const s3Upload = await uploadToS3(fileBuffer, s3Key, file.mimetype);
 
     fs.unlinkSync(file.filepath);

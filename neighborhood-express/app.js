@@ -4,6 +4,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import cookieParser from "cookie-parser";
 import logger from "morgan";
+import cors from "cors"; // Import the cors package
 
 import videoRouter from "./routes/video.js";
 
@@ -11,6 +12,15 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
+
+// Add CORS middleware before other middlewares
+app.use(
+  cors({
+    origin: "http://localhost:3000", // Your frontend origin
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+  }),
+);
 
 app.use(logger("dev"));
 app.use(express.json());
