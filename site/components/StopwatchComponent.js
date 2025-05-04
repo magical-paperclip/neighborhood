@@ -490,7 +490,7 @@ const StopwatchComponent = ({ onClose, onAddProject, isExiting, userData }) => {
         formData.append("file", commitVideo); // 'file' matches what your server expects
 
         const uploadResponse = await fetch(
-          `https://vgso8kg840ss8cok4s4cwwgk.a.selfhosted.hackclub.com:3000/video/upload`,
+          `http://37.27.51.34:36025/video/upload`,
           {
             method: "POST",
             // Don't set Content-Type - fetch will set it automatically with boundary for FormData
