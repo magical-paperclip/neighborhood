@@ -163,6 +163,7 @@ const DisconnectedHackatime = ({
       </div>
       <div>
         <p>If this is not the correct slack account, then please paste in your SlackID in the input below:</p>
+        <p style={{fontSize: 12}}><i>you can get your slack ID from #what-is-my-slack-id channel on Slack</i></p>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <input 
             style={{

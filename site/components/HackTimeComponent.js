@@ -231,22 +231,22 @@ const HackTimeComponent = ({
       for (const result of projectSessionsResults) {
         newProjectSessions[result.projectName] = result.sessions;
         setLoadingState(prev => ({
-          ...prev,
+            ...prev,
           counts: { 
             ...prev.counts, 
             sessions: Object.keys(newProjectSessions).length 
           }
-        }));
+          }));
       }
 
       setProjectSessions(newProjectSessions);
 
       setLoadingState(prev => ({
-        ...prev,
+            ...prev,
         sessions: false,
         commits: true,
         message: "Loading Git commits..."
-      }));
+          }));
 
       // Process projects with GitHub links
       for (const project of data.data.projects) {
@@ -946,9 +946,9 @@ const HackTimeComponent = ({
       console.log(`Starting to fetch commits for ${repoPath}...`);
 
       const response = await fetch(`/api/github/commits?repoPath=${encodeURIComponent(repoPath)}`);
-      
-      if (!response.ok) {
-        const errorData = await response.json();
+
+        if (!response.ok) {
+          const errorData = await response.json();
         throw new Error(errorData.error || 'Failed to fetch commits');
       }
 
@@ -2188,13 +2188,13 @@ const HackTimeComponent = ({
                           }}
                         >
                           {hasSessions && (
-                            <div style={{ marginRight: "12px" }}>
-                              <input
-                                type="checkbox"
-                                checked={projectChecked}
-                                onChange={() => handleProjectSelect(project.name)}
-                              />
-                            </div>
+                          <div style={{ marginRight: "12px" }}>
+                            <input
+                              type="checkbox"
+                              checked={projectChecked}
+                              onChange={() => handleProjectSelect(project.name)}
+                            />
+                          </div>
                           )}
                           <div style={{ flex: 1 }}>
                             <p
