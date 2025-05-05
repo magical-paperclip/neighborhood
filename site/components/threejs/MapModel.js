@@ -2,6 +2,7 @@ import { useGLTF } from "@react-three/drei";
 import { useMemo, useEffect } from "react";
 import * as THREE from "three";
 import createToonGradient from "../../utils/createToonGradient";
+import { RigidBody } from "@react-three/rapier";
 
 export default function MapModel({ onLoad }) {
     const { scene: mapModel } = useGLTF("/models/sf_map_3.glb");
@@ -9,8 +10,6 @@ export default function MapModel({ onLoad }) {
     
     useEffect(() => {
       if (mapModel) {
-        mapModel.scale.set(3.0, 3.0, 3.0);
-        mapModel.position.set(0.0, -0.01, 0.0);
         
         // Add toon shading to materials
         mapModel.traverse((child) => {
@@ -32,5 +31,10 @@ export default function MapModel({ onLoad }) {
       }
     }, [mapModel, toonGradient, onLoad]);
     
-    return <primitive object={mapModel} />;
+    return (
+    <RigidBody type="fixed" colliders="trimesh"
+      friction={0.5} restitution={0.1} sensor={false}>
+      <primitive object={mapModel} scale={[2,2,2]} position={[0,-0.01,0]}/>
+    </RigidBody>
+    );
   }

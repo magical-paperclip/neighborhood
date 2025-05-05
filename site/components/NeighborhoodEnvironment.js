@@ -2,12 +2,25 @@ import { useEffect, useState } from "react";
 import * as THREE from "three";
 import { Canvas, useThree } from "@react-three/fiber";
 import Scene from "./threejs/Scene";
+import { Physics } from "@react-three/rapier";
+import { Suspense } from "react";
+
+function CameraController() {
+  const { camera } = useThree();
+  camera.rotation.order = 'YXZ'; // This helps prevent gimbal lock
+  return null;
+}
 
 export default function NeighborhoodEnvironment({
   hasEnteredNeighborhood,
   setHasEnteredNeighborhood,
 }) {
   const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    setHasEnteredNeighborhood(false);
+  }, []);
+
   return (
     <div
       style={{
@@ -24,27 +37,38 @@ export default function NeighborhoodEnvironment({
           fov: 45,
           near: 0.1,
           far: 1000,
-          position: [2, 3, 1]
+          position: [2, 2.4, 1]
         }}
         gl={{
           antialias: true,
-          alpha: true,
+          alpha: false,
+          stencil: false,
+          depth: true,
           powerPreference: "high-performance",
-          outputEncoding: THREE.sRGBEncoding,
-          precision: "mediump" // medium precision for better balance
+          physicallyCorrectLights: false,
         }}
-        dpr={[0.9, 1.75]} // adjusted for better balance
+        dpr={1} // Set to 1 for better performance
+        frameloop="demand"
+        performance={{ min: 0.5 }}
         shadows={false}
       >
-        {/* Camera controls initial look target */}
-        <CameraController />
-        
-        <Scene 
-          hasEnteredNeighborhood={hasEnteredNeighborhood}
-          setHasEnteredNeighborhood={setHasEnteredNeighborhood}
-          isLoading={isLoading}
-          setIsLoading={setIsLoading}
-        />
+        <Suspense>
+          <Physics
+            debug={false}
+            gravity={[0, -30, 0]}
+            maxStabilizationIterations={4}
+            maxVelocityFriction={0.2}
+            maxVelocityIterations={4}
+          >
+            <CameraController />
+            <Scene 
+              hasEnteredNeighborhood={hasEnteredNeighborhood}
+              setHasEnteredNeighborhood={setHasEnteredNeighborhood}
+              isLoading={isLoading}
+              setIsLoading={setIsLoading}
+            />
+          </Physics>
+        </Suspense>
       </Canvas>
       
       {isLoading && (
@@ -62,15 +86,5 @@ export default function NeighborhoodEnvironment({
       )}
     </div>
   );
-}
-// Camera controller component to set initial look target
-function CameraController() {
-  const { camera } = useThree();
-  
-  useEffect(() => {
-    camera.lookAt(-0.5, 2.4, 0);
-  }, [camera]);
-  
-  return null;
 }
 

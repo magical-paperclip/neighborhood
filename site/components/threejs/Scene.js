@@ -6,14 +6,16 @@ import MapModel from "./MapModel";
 import PlayerModel from "./PlayerModel";
 import Effects from "./Effects";
 import { useThree, useFrame } from "@react-three/fiber";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
+
 
 export default function Scene({ hasEnteredNeighborhood, setHasEnteredNeighborhood, isLoading, setIsLoading }) {
     const { scene, camera } = useThree();
     const containerRef = useRef(new THREE.Object3D());
     const fadeTimeRef = useRef(null);
+    const [pointerLocked, setPointerLocked] = useState(false);
     
-    // Movement state - use state instead of ref to trigger re-renders
+    // Movement state - track key states but let PlayerModel handle the actual movement
     const [moveState, setMoveState] = useState({
       w: false,
       a: false,
@@ -24,27 +26,11 @@ export default function Scene({ hasEnteredNeighborhood, setHasEnteredNeighborhoo
       escape: false
     });
     
-    // Jump state
-    const jumpState = useRef({
-      isJumping: false,
-      jumpVelocity: 0,
-      groundY: 0
-    });
-    
-    // Movement settings
-    const movementSettings = {
-      moveSpeed: 0.05,
-      sprintSpeed: 0.1,
-      rotationSpeed: 0.02,
-      jumpHeight: 0.5,
-      gravity: 0.015,
-    };
-    
     // Camera settings
-    const cameraSettings = {
+    const cameraSettings = useMemo(() => ({
       start: {
-        position: new THREE.Vector3(2, 3, 1),
-        lookAt: new THREE.Vector3(-0.5, 2.4, 0),
+        position: new THREE.Vector3(2, 2.4, 1),
+        lookAt: new THREE.Vector3(-0.5, 2.5, 0),
         fov: 45,
       },
       end: {
@@ -52,11 +38,30 @@ export default function Scene({ hasEnteredNeighborhood, setHasEnteredNeighborhoo
         offset: new THREE.Vector3(0, 3, 6),
         fov: 75,
       },
-    };
+    }), []);
+    
+    // Cached vectors for camera calculations to avoid object creation
+    const cameraPos = useMemo(() => new THREE.Vector3(), []);
+    const lookAtTarget = useMemo(() => new THREE.Vector3(), []);
+    const currentPosition = useMemo(() => new THREE.Vector3(), []);
+    const currentLookAt = useMemo(() => new THREE.Vector3(), []);
     
     // Game startup
-    const gameplayLookAtOffset = new THREE.Vector3(0, 2, 0);
+    const gameplayLookAtOffset = useMemo(() => new THREE.Vector3(0, 2, 0), []);
     const startTimeRef = useRef(null);
+    
+    // Track pointer lock state
+    useEffect(() => {
+      const handleLockChange = () => {
+        setPointerLocked(document.pointerLockElement !== null);
+      };
+      
+      document.addEventListener('pointerlockchange', handleLockChange);
+      
+      return () => {
+        document.removeEventListener('pointerlockchange', handleLockChange);
+      };
+    }, []);
     
     // Setup scene
     useEffect(() => {
@@ -92,15 +97,10 @@ export default function Scene({ hasEnteredNeighborhood, setHasEnteredNeighborhoo
             setMoveState(prev => ({ ...prev, shift: true }));
             break;
           case " ":
-            if (!jumpState.current.isJumping) {
-              jumpState.current.isJumping = true;
-              jumpState.current.jumpVelocity = movementSettings.jumpHeight;
-            }
             setMoveState(prev => ({ ...prev, space: true }));
             break;
           case "escape":
-            setMoveState(prev => ({ ...prev, escape: true }));
-            setHasEnteredNeighborhood(false);
+            // Do nothing when ESC is pressed
             break;
         }
       };
@@ -126,7 +126,7 @@ export default function Scene({ hasEnteredNeighborhood, setHasEnteredNeighborhoo
             setMoveState(prev => ({ ...prev, space: false }));
             break;
           case "escape":
-            setMoveState(prev => ({ ...prev, escape: false }));
+            // Do nothing when ESC is released
             break;
         }
       };
@@ -141,7 +141,11 @@ export default function Scene({ hasEnteredNeighborhood, setHasEnteredNeighborhoo
       };
     }, [scene, hasEnteredNeighborhood, isLoading, setIsLoading, setHasEnteredNeighborhood]);
     
-    // Handle movement and camera updates
+    // Performance throttling for camera updates
+    const lastCameraUpdate = useRef(0);
+    const CAMERA_UPDATE_INTERVAL = 1000 / 60; // 60fps target for camera
+    
+    // Handle camera updates
     useFrame((_, delta) => {
       if (!startTimeRef.current) startTimeRef.current = Date.now();
       const elapsedTime = (Date.now() - startTimeRef.current) / 1000;
@@ -152,119 +156,95 @@ export default function Scene({ hasEnteredNeighborhood, setHasEnteredNeighborhoo
         ? 4 * progress * progress * progress
         : 1 - Math.pow(-2 * progress + 2, 3) / 2;
       
+      // Throttle camera updates for better performance
+      const now = performance.now();
+      const shouldUpdateCamera = now - lastCameraUpdate.current >= CAMERA_UPDATE_INTERVAL;
+      
+      // Never change camera based on pointer lock state - PlayerModel handles the camera
+      // This ensures ESC doesn't affect the camera
       if (hasEnteredNeighborhood && !isLoading) {
-        const { moveSpeed, sprintSpeed, rotationSpeed, gravity } = movementSettings;
+        return; // Let PlayerModel handle all camera controls when in game
+      }
+      
+      if (shouldUpdateCamera) {
+        lastCameraUpdate.current = now;
         
-        // Interpolate FOV
-        camera.fov = THREE.MathUtils.lerp(
-          cameraSettings.start.fov,
-          cameraSettings.end.fov,
-          eased
-        );
-        camera.updateProjectionMatrix();
-        
-        // Handle rotation
-        if (moveState.a) {
-          containerRef.current.rotation.y += rotationSpeed;
-        }
-        if (moveState.d) {
-          containerRef.current.rotation.y -= rotationSpeed;
-        }
-        
-        // Calculate forward direction
-        const forward = new THREE.Vector3(0, 0, 1);
-        forward.applyQuaternion(containerRef.current.quaternion);
-        
-        // Handle movement
-        const currentSpeed = moveState.shift ? sprintSpeed : moveSpeed;
-        if (moveState.w) {
-          containerRef.current.position.add(forward.clone().multiplyScalar(currentSpeed));
-        }
-        if (moveState.s) {
-          containerRef.current.position.add(forward.clone().multiplyScalar(-currentSpeed));
-        }
-        
-        // Handle jumping
-        if (jumpState.current.isJumping) {
-          containerRef.current.position.y += jumpState.current.jumpVelocity;
-          jumpState.current.jumpVelocity -= gravity;
+        if (hasEnteredNeighborhood && !isLoading) {
+          // Interpolate FOV
+          camera.fov = THREE.MathUtils.lerp(
+            cameraSettings.start.fov,
+            cameraSettings.end.fov,
+            eased
+          );
+          camera.updateProjectionMatrix();
           
-          if (containerRef.current.position.y <= jumpState.current.groundY) {
-            containerRef.current.position.y = jumpState.current.groundY;
-            jumpState.current.isJumping = false;
-            jumpState.current.jumpVelocity = 0;
+          // Update camera position
+          if (progress === 1) {
+            const cameraAngle = containerRef.current.rotation.y;
+            const distance = 6;
+            const height = 3;
+            
+            cameraPos.set(
+              containerRef.current.position.x - Math.sin(cameraAngle) * distance,
+              containerRef.current.position.y + height,
+              containerRef.current.position.z - Math.cos(cameraAngle) * distance
+            );
+            camera.position.copy(cameraPos);
+            
+            lookAtTarget.set(
+              containerRef.current.position.x + Math.sin(cameraAngle) * gameplayLookAtOffset.z,
+              containerRef.current.position.y + gameplayLookAtOffset.y,
+              containerRef.current.position.z + Math.cos(cameraAngle) * gameplayLookAtOffset.z
+            );
+            camera.lookAt(lookAtTarget);
+          } else {
+            // During transition
+            currentPosition.lerpVectors(
+              cameraSettings.start.position,
+              new THREE.Vector3(
+                containerRef.current.position.x - Math.sin(containerRef.current.rotation.y) * 4,
+                containerRef.current.position.y + 4,
+                containerRef.current.position.z - Math.cos(containerRef.current.rotation.y) * 4
+              ),
+              eased
+            );
+            camera.position.copy(currentPosition);
+            
+            const startLookAt = cameraSettings.start.lookAt;
+            const endLookAt = new THREE.Vector3(
+              containerRef.current.position.x,
+              containerRef.current.position.y + 0.5,
+              containerRef.current.position.z
+            );
+            currentLookAt.lerpVectors(startLookAt, endLookAt, eased);
+            camera.lookAt(currentLookAt);
           }
-        }
-        
-        // Update camera position
-        if (progress === 1) {
-          const cameraAngle = containerRef.current.rotation.y;
-          const distance = 6;
-          const height = 3;
-          
-          camera.position.set(
-            containerRef.current.position.x - Math.sin(cameraAngle) * distance,
-            containerRef.current.position.y + height,
-            containerRef.current.position.z - Math.cos(cameraAngle) * distance
-          );
-          
-          const lookAtTarget = new THREE.Vector3(
-            containerRef.current.position.x + Math.sin(cameraAngle) * gameplayLookAtOffset.z,
-            containerRef.current.position.y + gameplayLookAtOffset.y,
-            containerRef.current.position.z + Math.cos(cameraAngle) * gameplayLookAtOffset.z
-          );
-          camera.lookAt(lookAtTarget);
         } else {
-          // During transition
-          const currentPosition = new THREE.Vector3();
+          // Reset positions when exiting
+          if (containerRef.current) {
+            containerRef.current.position.set(0, 1.0, 0);
+            containerRef.current.rotation.set(0, 0, 0);
+          }
+          
+          // Transition camera back
           currentPosition.lerpVectors(
-            cameraSettings.start.position,
             new THREE.Vector3(
-              containerRef.current.position.x - Math.sin(containerRef.current.rotation.y) * 4,
-              containerRef.current.position.y + 4,
-              containerRef.current.position.z - Math.cos(containerRef.current.rotation.y) * 4
+              -Math.sin(containerRef.current.rotation.y) * 4,
+              3.4, // Lowered from 3.7 to 3.4
+              -Math.cos(containerRef.current.rotation.y) * 4
             ),
+            cameraSettings.start.position,
             eased
           );
           camera.position.copy(currentPosition);
           
-          const startLookAt = cameraSettings.start.lookAt;
-          const endLookAt = new THREE.Vector3(
-            containerRef.current.position.x,
-            containerRef.current.position.y + 0.5,
-            containerRef.current.position.z
+          currentLookAt.lerpVectors(
+            new THREE.Vector3(0, 2.0, 0), // Raised from 1.5 to 2.0 to make camera look less downward
+            cameraSettings.start.lookAt,
+            eased
           );
-          const currentLookAt = new THREE.Vector3();
-          currentLookAt.lerpVectors(startLookAt, endLookAt, eased);
           camera.lookAt(currentLookAt);
         }
-      } else {
-        // Reset positions when exiting
-        if (containerRef.current) {
-          containerRef.current.position.set(0, 1.0, 0);
-          containerRef.current.rotation.set(0, 0, 0);
-        }
-        
-        // Transition camera back
-        const currentPosition = new THREE.Vector3();
-        currentPosition.lerpVectors(
-          new THREE.Vector3(
-            -Math.sin(containerRef.current.rotation.y) * 4,
-            4,
-            -Math.cos(containerRef.current.rotation.y) * 4
-          ),
-          cameraSettings.start.position,
-          eased
-        );
-        camera.position.copy(currentPosition);
-        
-        const currentLookAt = new THREE.Vector3();
-        currentLookAt.lerpVectors(
-          new THREE.Vector3(0, 0.5, 0),
-          cameraSettings.start.lookAt,
-          eased
-        );
-        camera.lookAt(currentLookAt);
       }
     });
     
@@ -278,17 +258,12 @@ export default function Scene({ hasEnteredNeighborhood, setHasEnteredNeighborhoo
       }
     }, [assetsLoaded, isLoading, setIsLoading]);
     
-    // Debug - log movement state changes
-    useEffect(() => {
-      console.log("Movement state updated:", moveState);
-    }, [moveState]);
-    
     return (
       <>
         {/* Scene lights - balanced intensity */}
-        <ambientLight color={0xf4ccff} intensity={1.2} /> {/* increased from 1.0 */}
-        <directionalLight position={[5, 5, 5]} intensity={1.1} /> {/* increased from 1.0 */}
-        <pointLight position={[-5, 5, -5]} intensity={0.5} /> {/* added back but with lower intensity */}
+        <ambientLight color={0xf4ccff} intensity={1.2} />
+        <directionalLight position={[5, 5, 5]} intensity={1.1} />
+        <pointLight position={[-5, 5, -5]} intensity={0.5} />
         
         {/* Clouds */}
         <Clouds />
@@ -301,9 +276,10 @@ export default function Scene({ hasEnteredNeighborhood, setHasEnteredNeighborhoo
         
         {/* Player model */}
         <PlayerModel 
-          containerRef={containerRef} 
           moveState={moveState}
+          containerRef={containerRef}
           onLoad={() => setAssetsLoaded(prev => ({ ...prev, player: true }))}
+          hasEnteredNeighborhood={hasEnteredNeighborhood}
         />
         
         {/* Post-processing effects */}

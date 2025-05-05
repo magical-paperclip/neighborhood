@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect } from "react";
 import * as THREE from "three";
 import createToonGradient from "../../utils/createToonGradient";
+import { RigidBody } from "@react-three/rapier";
 
 export default function Ground({ onLoad }) {
     const [texture, setTexture] = useState(null);
@@ -26,16 +27,20 @@ export default function Ground({ onLoad }) {
     }, [onLoad]);
     
     return (
-      <mesh rotation={[Math.PI / 2, 0, 0]} position={[0, 0, 0]}>
-        <planeGeometry args={[1000, 1000]} />
-        <meshToonMaterial
-          map={texture}
-          gradientMap={toonGradient}
-          color={0x8dc63f}
-          side={THREE.DoubleSide}
-          emissive={0x1a4d1a}
-          emissiveIntensity={0.15} // increased from 0.1
-        />
-      </mesh>
+      <RigidBody type="fixed" colliders="cuboid"
+       friction={0.5} restitution={0.1} sensor={false}>
+        <mesh rotation={[Math.PI / 2, 0, 0]} position={[0, 0, 0]}>
+          <planeGeometry args={[1000, 1000]} />
+          <meshToonMaterial
+            map={texture}
+            gradientMap={toonGradient}
+            color={0x8dc63f}
+            side={THREE.DoubleSide}
+            emissive={0x1a4d1a}
+            emissiveIntensity={0.15} // increased from 0.1
+            receiveShadow
+          />
+        </mesh>
+      </RigidBody>
     );
   }
