@@ -485,33 +485,16 @@ const StopwatchComponent = ({ onClose, onAddProject, isExiting, userData }) => {
           sanitizedFilename = (baseName || "file") + extension;
         }
 
-        // Get presigned URL from API
-        const getUrlResponse = await fetch("/api/getSignedUrl", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            contentType: commitVideo.type,
-            filename: sanitizedFilename, // Use sanitized filename
-          }),
-        });
+        const formData = new FormData();
+        formData.append("token", getToken());
+        formData.append("file", commitVideo); // 'file' matches what your server expects
 
-        if (!getUrlResponse.ok) {
-          throw new Error("Failed to get upload URL");
-        }
-
-        const { uploadUrl, fileUrl } = await getUrlResponse.json();
-
-        // Use the proxy API to upload the video
         const uploadResponse = await fetch(
-          `https://cproxy.spectralo.hackclub.app/?url=` + uploadUrl,
+          `https://express.spectralo.hackclub.app/video/upload`,
           {
-            method: "PUT",
-            headers: {
-              "Content-Type": commitVideo.type,
-            },
-            body: commitVideo, // Send the actual file
+            method: "POST",
+            // Don't set Content-Type - fetch will set it automatically with boundary for FormData
+            body: formData,
           },
         );
 
@@ -519,7 +502,10 @@ const StopwatchComponent = ({ onClose, onAddProject, isExiting, userData }) => {
           throw new Error("Failed to upload video");
         }
 
-        videoUrl = fileUrl;
+        // Get the video URL from the response
+        const responseData = await uploadResponse.json();
+        videoUrl = responseData.url; // Extract the URL from the response object
+
         console.log("Upload successful, URL:", videoUrl);
       }
       // Only proceed if the upload succeeded
@@ -565,14 +551,9 @@ const StopwatchComponent = ({ onClose, onAddProject, isExiting, userData }) => {
       setShowModal(false);
       setCommitMessage("");
       setCommitVideo(null);
-      setProjectName("");
       setElapsedTime(0);
-
-      // Play success sound
-      //
       playSuccessSound();
 
-      // After successful commit, refresh the commits list
       const token = getToken();
       const commitsResponse = await fetch(`/api/getCommits?token=${token}`);
       const commitsData = await commitsResponse.json();
