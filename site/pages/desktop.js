@@ -284,6 +284,14 @@ export default function Home() {
                 isExiting={isExiting}
                 onClose={handleCloseComponent}
                 userData={userData}
+                setUserData={setUserData}
+                slackUsers={slackUsers}
+                setSlackUsers={setSlackUsers}
+                connectingSlack={connectingSlack}
+                setConnectingSlack={setConnectingSlack}
+                searchSlack={searchSlack}
+                setSearchSlack={setSearchSlack}
+                setUIPage={setUIPage}
               />
             )}
           </div>
@@ -442,6 +450,53 @@ export default function Home() {
                       )}
                     </div>
                     } */}
+
+                    {userData?.slackHandle && (
+                      <button 
+                        style={{
+                          backgroundColor: "#fff", 
+                          cursor: "pointer", 
+                          color: "#000", 
+                          border: "1px solid #000", 
+                          padding: 6, 
+                          borderRadius: 6,
+                          marginBottom: 8
+                        }}
+                        onClick={async () => {
+                          try {
+                            const token = localStorage.getItem('neighborhoodToken');
+                            const response = await fetch('/api/deleteSlackMember', {
+                              method: 'POST',
+                              headers: {
+                                'Content-Type': 'application/json',
+                              },
+                              body: JSON.stringify({ token })
+                            });
+
+                            if (!response.ok) {
+                              const errorData = await response.json();
+                              throw new Error(errorData.error || 'Failed to disconnect Slack account');
+                            }
+
+                            // Update UI to remove Slack data
+                            setUserData(prev => ({
+                              ...prev,
+                              slackHandle: null,
+                              profilePicture: null,
+                              fullName: null,
+                              slackId: null
+                            }));
+
+                            setProfileDropdown(false);
+                          } catch (error) {
+                            console.error('Error disconnecting Slack:', error);
+                            alert(error.message || 'Failed to disconnect Slack account');
+                          }
+                        }}
+                      >
+                        Disconnect Slack Account
+                      </button>
+                    )}
 
                     <button 
                     style={{backgroundColor: "#000", cursor: "pointer", color: "#fff", border: "1px solid #000", padding: 6, borderRadius: 6}}

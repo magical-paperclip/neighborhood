@@ -4,10 +4,23 @@ import StopwatchComponent from "./StopwatchComponent";
 import { getToken } from "@/utils/storage";
 import Soundfont from "soundfont-player";
 import AddProjectComponent from "./AddProjectComponent";
+import DisconnectedHackatime from "./DisconnectedHackatime";
 
 const BOARD_BAR_HEIGHT = 50;
 
-const HackTimeComponent = ({ isExiting, onClose, userData }) => {
+const HackTimeComponent = ({ 
+  isExiting, 
+  onClose, 
+  userData,
+  setUserData,
+  slackUsers,
+  setSlackUsers,
+  connectingSlack,
+  setConnectingSlack,
+  searchSlack,
+  setSearchSlack,
+  setUIPage
+}) => {
   const [timeTrackingMethod, setTimeTrackingMethod] = useState(""); // Default to stopwatch
   const [projects, setProjects] = useState([]);
   const [checkedProjects, setCheckedProjects] = useState([]); // Array of App Names that are checked
@@ -43,6 +56,17 @@ const HackTimeComponent = ({ isExiting, onClose, userData }) => {
   });
   const [emailChangeValid, setEmailChangeValid] = useState(false);
   const [email, setEmail] = useState("");
+  const [loadingState, setLoadingState] = useState({
+    projects: false,
+    sessions: false,
+    commits: false,
+    message: "",
+    counts: {
+      projects: 0,
+      sessions: 0,
+      commits: 0
+    }
+  });
 
   // Add debounce helper at the top level of the component
   const debounce = (func, wait) => {
@@ -126,6 +150,13 @@ const HackTimeComponent = ({ isExiting, onClose, userData }) => {
 
   const fetchHackatimeData = async () => {
     try {
+      setLoadingState({
+        projects: true,
+        sessions: false,
+        commits: false,
+        message: "Loading projects...",
+        counts: { projects: 0, sessions: 0, commits: 0 }
+      });
       console.log("Starting fetchHackatimeData");
       const token = getToken();
       if (!token) {
@@ -150,6 +181,10 @@ const HackTimeComponent = ({ isExiting, onClose, userData }) => {
       console.log("Hackatime API response:", data.data.projects);
 
       setProjects(data.data.projects || []);
+      setLoadingState(prev => ({
+        ...prev,
+        counts: { ...prev.counts, projects: data.data.projects?.length || 0 }
+      }));
 
       // Update checked projects from API response
       const checked = data.data.projects
@@ -160,72 +195,12 @@ const HackTimeComponent = ({ isExiting, onClose, userData }) => {
       // Create a new object to hold all commit data
       const newCommitData = {};
 
-      // Process projects with GitHub links
-      for (const project of data.data.projects) {
-        console.log(
-          "Processing project:",
-          project.name,
-          "GitHub link:",
-          project.githubLink,
-        );
-        if (project.githubLink) {
-          console.log("Found GitHub link for project:", project.name);
-
-          // Update GitHub links state
-          setGithubLinks((prev) => ({
-            ...prev,
-            [project.name]: project.githubLink,
-          }));
-
-          // Set loading state
-          setIsLoadingCommits((prev) => ({
-            ...prev,
-            [project.name]: true,
-          }));
-
-          try {
-            const match = project.githubLink.match(
-              /github\.com\/([^\/]+\/[^\/]+)/,
-            );
-            if (!match) {
-              throw new Error("Invalid GitHub URL format");
-            }
-            const repoPath = match[1];
-            console.log(
-              "Fetching commits for:",
-              project.name,
-              "repo path:",
-              repoPath,
-            );
-
-            const commits = await fetchGithubCommits(repoPath);
-            console.log(
-              "Fetched commits for:",
-              project.name,
-              "count:",
-              commits.length,
-            );
-
-            // Store commits in our new object
-            newCommitData[project.name] = commits;
-          } catch (error) {
-            console.error(`Error fetching commits for ${project.name}:`, error);
-            setCommitFetchErrors((prev) => ({
-              ...prev,
-              [project.name]: error.message,
-            }));
-          } finally {
-            setIsLoadingCommits((prev) => ({
-              ...prev,
-              [project.name]: false,
-            }));
-          }
-        }
-      }
-
-      // Update commit data state once with all commits
-      console.log("Setting all commit data:", newCommitData);
-      setCommitData(newCommitData);
+      setLoadingState(prev => ({
+        ...prev,
+        projects: false,
+        sessions: true,
+        message: "Loading sessions..."
+      }));
 
       // Fetch sessions for all projects
       const startDate = new Date(2025, 3, 30);
@@ -255,24 +230,99 @@ const HackTimeComponent = ({ isExiting, onClose, userData }) => {
       // Process each project's sessions
       for (const result of projectSessionsResults) {
         newProjectSessions[result.projectName] = result.sessions;
-
-        // If project has commits, match sessions with commits immediately
-        if (newCommitData[result.projectName] && result.sessions.length > 0) {
-          console.log(
-            `Matching sessions for ${result.projectName} on initial load`,
-          );
-          matchSessionsToCommits(
-            result.sessions,
-            newCommitData[result.projectName],
-            result.projectName,
-          );
-        }
+        setLoadingState(prev => ({
+          ...prev,
+          counts: { 
+            ...prev.counts, 
+            sessions: Object.keys(newProjectSessions).length 
+          }
+        }));
       }
 
       setProjectSessions(newProjectSessions);
+
+      setLoadingState(prev => ({
+        ...prev,
+        sessions: false,
+        commits: true,
+        message: "Loading Git commits..."
+      }));
+
+      // Process projects with GitHub links
+      for (const project of data.data.projects) {
+        if (project.githubLink) {
+          try {
+            const match = project.githubLink.match(
+              /github\.com\/([^\/]+\/[^\/]+)/,
+            );
+            if (!match) {
+              throw new Error("Invalid GitHub URL format");
+            }
+            const repoPath = match[1];
+
+            const commits = await fetchGithubCommits(repoPath);
+            newCommitData[project.name] = commits;
+            
+            setLoadingState(prev => ({
+              ...prev,
+              counts: { 
+                ...prev.counts, 
+                commits: Object.keys(newCommitData).length 
+              }
+            }));
+
+            console.log(
+              "Fetching commits for:",
+              project.name,
+              "repo path:",
+              repoPath,
+            );
+
+            // Store commits in our new object
+            newCommitData[project.name] = commits;
+          } catch (error) {
+            console.error(`Error fetching commits for ${project.name}:`, error);
+            setCommitFetchErrors((prev) => ({
+              ...prev,
+              [project.name]: error.message,
+            }));
+          } finally {
+            setIsLoadingCommits((prev) => ({
+              ...prev,
+              [project.name]: false,
+            }));
+          }
+        }
+      }
+
+      // Update commit data state once with all commits
+      console.log("Setting all commit data:", newCommitData);
+      setCommitData(newCommitData);
+
+      setLoadingState({
+        projects: false,
+        sessions: false,
+        commits: false,
+        message: "All data loaded successfully!"
+      });
+
+      // Clear success message after 3 seconds
+      setTimeout(() => {
+        setLoadingState(prev => ({
+          ...prev,
+          message: ""
+        }));
+      }, 3000);
+
     } catch (error) {
       console.error("Error in fetchHackatimeData:", error);
       setProjects([]); // Ensure projects is at least an empty array on error
+      setLoadingState({
+        projects: false,
+        sessions: false,
+        commits: false,
+        message: "Error loading data. Please try again."
+      });
     }
   };
 
@@ -895,75 +945,16 @@ const HackTimeComponent = ({ isExiting, onClose, userData }) => {
     try {
       console.log(`Starting to fetch commits for ${repoPath}...`);
 
-      // Clean up the repo path - handle both URL and owner/repo format
-      let cleanRepoPath = repoPath;
-      if (repoPath.includes("github.com")) {
-        // Handle full URLs with optional .git extension
-        cleanRepoPath = repoPath
-          .replace(/https?:\/\/github\.com\//, "")
-          .replace(/\.git$/, "")
-          .replace(/\/$/, ""); // Remove trailing slash
+      const response = await fetch(`/api/github/commits?repoPath=${encodeURIComponent(repoPath)}`);
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to fetch commits');
       }
 
-      // Remove any extra segments after owner/repo
-      cleanRepoPath = cleanRepoPath.split("/").slice(0, 2).join("/");
-
-      console.log(`Cleaned repo path: ${cleanRepoPath}`);
-
-      if (!cleanRepoPath.includes("/")) {
-        throw new Error("Invalid repository format. Expected owner/repo");
-      }
-
-      let allCommits = [];
-      let page = 1;
-      let hasMore = true;
-
-      while (hasMore) {
-        const url = `https://api.github.com/repos/${cleanRepoPath}/commits?per_page=100&page=${page}`;
-        console.log(`Fetching page ${page} from: ${url}`);
-
-        const response = await fetch(url, {
-          headers: {
-            Accept: "application/vnd.github.v3+json",
-            Authorization: "Bearer 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",
-          },
-        });
-
-        if (response.status === 404) {
-          console.log(
-            "Repository not found. Please check the URL and ensure the repository is public.",
-          );
-        }
-
-        if (!response.ok) {
-          const errorData = await response.json();
-          console.error("GitHub API Error:", errorData);
-        }
-
-        const commits = await response.json();
-        console.log(`Fetched ${commits.length} commits on page ${page}`);
-
-        // Filter out merge commits and add to all commits
-        const filteredCommits = commits
-          .filter(
-            (commit) => !commit.commit.message.toLowerCase().includes("merge"),
-          )
-          .map((commit) => ({
-            sha: commit.sha,
-            message: commit.commit.message,
-            date: new Date(commit.commit.author.date).getTime(),
-            url: commit.html_url,
-          }));
-
-        allCommits = [...allCommits, ...filteredCommits];
-
-        // Check if we've reached the end
-        hasMore = commits.length === 100;
-        page++;
-      }
-
-      console.log(`Total commits fetched and filtered: ${allCommits.length}`);
-      return allCommits;
+      const data = await response.json();
+      console.log(`Total commits fetched and filtered: ${data.commits.length}`);
+      return data.commits;
     } catch (error) {
       console.error("Error in fetchGithubCommits:", error);
       // Include the error message in the commit fetch errors
@@ -1612,7 +1603,7 @@ const HackTimeComponent = ({ isExiting, onClose, userData }) => {
         transform: translateY(-6px) rotate(-2deg);
       }
       75% {
-        transform: twranslateY(-6px) rotate(2deg);
+        transform: translateY(-6px) rotate(2deg);
       }
     }
 
@@ -1648,6 +1639,61 @@ const HackTimeComponent = ({ isExiting, onClose, userData }) => {
       20%, 40%, 60%, 80% {
         transform: translateX(5px);
         background-color: #ffebee;
+      }
+    }
+
+    @keyframes loadingChipIn {
+      0% {
+        opacity: 0;
+        transform: translateY(20px) scale(0.8);
+      }
+      60% {
+        opacity: 1;
+        transform: translateY(-5px) scale(1.05);
+      }
+      100% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+    }
+
+    @keyframes loadingChipOut {
+      0% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+      100% {
+        opacity: 0;
+        transform: translateY(20px) scale(0.8);
+      }
+    }
+
+    @keyframes loadingDot {
+      0%, 100% {
+        transform: scale(0.8);
+        opacity: 0.5;
+      }
+      50% {
+        transform: scale(1.2);
+        opacity: 1;
+      }
+    }
+
+    @keyframes loadingBar {
+      0% {
+        width: 0%;
+      }
+      100% {
+        width: 100%;
+      }
+    }
+
+    @keyframes loadingCircle {
+      0% {
+        transform: rotate(0deg);
+      }
+      100% {
+        transform: rotate(360deg);
       }
     }
   `;
@@ -1718,9 +1764,101 @@ const HackTimeComponent = ({ isExiting, onClose, userData }) => {
         style={{
           flex: 1,
           overflowY: "auto",
-          background: "#febdc3", // pastel pink background
+          background: "#febdc3",
+          position: "relative",
         }}
       >
+        <style>{bounceKeyframes}</style>
+        {loadingState.message && (
+          <div
+            style={{
+              position: "absolute",
+              bottom: "20px",
+              right: "20px",
+              padding: "8px 16px",
+              backgroundColor: loadingState.message.includes("Error") 
+                ? "rgba(255, 0, 0, 0.1)" 
+                : "rgba(255, 255, 255, 0.9)",
+              color: loadingState.message.includes("Error") 
+                ? "#ff0000" 
+                : "#ef758a",
+              textAlign: "center",
+              fontSize: "14px",
+              fontWeight: "500",
+              zIndex: 10,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "8px",
+              borderRadius: "20px",
+              border: loadingState.message.includes("Error")
+                ? "1px solid rgba(255, 0, 0, 0.2)"
+                : "1px solid rgba(239, 117, 138, 0.2)",
+              backdropFilter: "blur(4px)",
+              animation: loadingState.message === "All data loaded successfully!"
+                ? "loadingChipOut 0.5s ease-out forwards"
+                : "loadingChipIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards",
+            }}
+          >
+            {loadingState.projects && (
+              <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
+                <div style={{ 
+                  width: "8px", 
+                  height: "8px", 
+                  borderRadius: "50%", 
+                  backgroundColor: "#ef758a",
+                  animation: "loadingDot 1s ease-in-out infinite"
+                }} />
+                <div style={{ 
+                  width: "8px", 
+                  height: "8px", 
+                  borderRadius: "50%", 
+                  backgroundColor: "#ef758a",
+                  animation: "loadingDot 1s ease-in-out infinite 0.2s"
+                }} />
+                <div style={{ 
+                  width: "8px", 
+                  height: "8px", 
+                  borderRadius: "50%", 
+                  backgroundColor: "#ef758a",
+                  animation: "loadingDot 1s ease-in-out infinite 0.4s"
+                }} />
+              </div>
+            )}
+            {loadingState.sessions && (
+              <div style={{ 
+                width: "24px", 
+                height: "4px", 
+                backgroundColor: "rgba(239, 117, 138, 0.2)",
+                borderRadius: "2px",
+                overflow: "hidden"
+              }}>
+                <div style={{ 
+                  width: "100%", 
+                  height: "100%", 
+                  backgroundColor: "#ef758a",
+                  animation: "loadingBar 1.5s ease-in-out infinite"
+                }} />
+              </div>
+            )}
+            {loadingState.commits && (
+              <div style={{ 
+                width: "16px", 
+                height: "16px", 
+                border: "2px solid rgba(239, 117, 138, 0.2)",
+                borderTopColor: "#ef758a",
+                borderRadius: "50%",
+                animation: "loadingCircle 1s linear infinite"
+              }} />
+            )}
+            <span style={{ 
+              minWidth: "120px",
+              textAlign: "left"
+            }}>
+              {loadingState.message}
+            </span>
+          </div>
+        )}
         {timeTrackingMethod == "" && (
           <div style={{ position: "relative", width: "100%", height: "100%" }}>
             <audio
@@ -2025,14 +2163,10 @@ const HackTimeComponent = ({ isExiting, onClose, userData }) => {
                   neighborhood.
                 </p>
 
-                {projects
-                  .filter(
-                    (project) =>
-                      getTotalDuration(projectSessions[project.name] || []) > 0,
-                  )
-                  .map((project) => {
+                {projects.map((project) => {
                     const projectChecked = isProjectChecked(project.name);
                     const hasCommits = commitData[project.name]?.length > 0;
+                    const hasSessions = getTotalDuration(projectSessions[project.name] || []) > 0;
                     const grouped = groupSessionsByCommit(
                       projectSessions[project.name] || [],
                       project.name,
@@ -2050,15 +2184,18 @@ const HackTimeComponent = ({ isExiting, onClose, userData }) => {
                             marginBottom: "8px",
                             width: "100%",
                             position: "relative",
+                            opacity: hasSessions ? 1 : 0.5,
                           }}
                         >
-                          <div style={{ marginRight: "12px" }}>
-                            <input
-                              type="checkbox"
-                              checked={projectChecked}
-                              onChange={() => handleProjectSelect(project.name)}
-                            />
-                          </div>
+                          {hasSessions && (
+                            <div style={{ marginRight: "12px" }}>
+                              <input
+                                type="checkbox"
+                                checked={projectChecked}
+                                onChange={() => handleProjectSelect(project.name)}
+                              />
+                            </div>
+                          )}
                           <div style={{ flex: 1 }}>
                             <p
                               style={{
@@ -2124,7 +2261,7 @@ const HackTimeComponent = ({ isExiting, onClose, userData }) => {
                               </p>
                             )}
                           </div>
-                          {hasCommits && (
+                          {hasCommits && hasSessions && (
                             <div>
                               <button
                                 onClick={() => toggleProject(project.name)}
@@ -2147,7 +2284,7 @@ const HackTimeComponent = ({ isExiting, onClose, userData }) => {
                           )}
                         </div>
                         {openedProjects.includes(project.name) &&
-                          hasCommits && (
+                          hasCommits && hasSessions && (
                             <div
                               style={{
                                 paddingLeft: "24px",
@@ -2165,81 +2302,21 @@ const HackTimeComponent = ({ isExiting, onClose, userData }) => {
                   })}
               </>
             ) : (
-              <div
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  padding: "32px",
-                  gap: "16px",
-                }}
-              >
-                <img
-                  src="/tick.png"
-                  alt="Hackatime"
-                  style={{
-                    width: 64,
-                    height: 64,
-                    marginBottom: 16,
-                  }}
-                />
-                <p
-                  style={{
-                    fontSize: "20px",
-                    color: "#333",
-                    maxWidth: "500px",
-                    lineHeight: 1.5,
-                  }}
-                >
-                  Hey, there <br />
-                  <br />
-                  It appears this is your first time using Hackatime and you
-                  have no projects set up yet. Head on over to
-                  hackatime.hackclub.com and they'll walk you through how to
-                  begin logging your time in Hackatime directly in your IDE
-                  automagically.
-                  <br />
-                  <br /> Once you log some time if you come back here you'll see
-                  your time in the interface and you can claim it.
-                  <br />
-                  Make sure to signup with the same email you used for
-                  Neighborhood :)
-                  <br />
-                  <br />
-                  If you get confused, pls send me an email thomas@hackclub.com
-                  and I'd be happy to help you get it working.
-                  <br />
-                  <br />
-                  <br />
-                  <br />
-                  PS : This could also be due to the fact that you signed up
-                  with another email than your slack account. Use the button
-                  below to change it, and enter your slack email adress this
-                  time :)
-                </p>
-
-                <button
-                  style={{
-                    padding: "8px 16px",
-                    border: "none",
-                    borderRadius: "4px",
-                    backgroundColor: "#ef758a",
-                    color: "white",
-                    cursor: "pointer",
-                    fontSize: "20px",
-                    fontWeight: "500",
-                    marginTop: 16,
-                  }}
-                  onClick={() => {
-                    setIsSettingEmail(true);
-                    setEmailCode("");
-                    setEmailChangeValid(false);
-                  }}
-                >
-                  Change my email
-                </button>
-              </div>
+              <DisconnectedHackatime 
+                setIsSettingEmail={setIsSettingEmail}
+                setEmail={setEmail}
+                setEmailCode={setEmailCode}
+                setEmailChangeValid={setEmailChangeValid}
+                userData={userData}
+                setUserData={setUserData}
+                slackUsers={slackUsers}
+                setSlackUsers={setSlackUsers}
+                connectingSlack={connectingSlack}
+                setConnectingSlack={setConnectingSlack}
+                searchSlack={searchSlack}
+                setSearchSlack={setSearchSlack}
+                setUIPage={setUIPage}
+              />
             )}
           </div>
         )}
