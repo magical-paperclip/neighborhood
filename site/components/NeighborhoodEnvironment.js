@@ -58,7 +58,7 @@ export default function NeighborhoodEnvironment({
             fontSize: "16px",
             textAlign: "center",
           }}
-        >Loading...</div>
+        ></div>
       )}
     </div>
   );
