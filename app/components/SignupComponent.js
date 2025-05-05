@@ -214,7 +214,7 @@ export default function SignupComponent({ setHasSignedIn }) {
         setToken(data.token);
 
         // Get Slack token from environment variable
-        const slackToken = process.env.NEXT_PUBLIC_SLACK_TOKEN;
+        const slackToken = process.env.PUBLIC_SLACK_TOKEN;
         if (slackToken) {
           try {
             await updateSlackUserData(formattedEmail, slackToken);
