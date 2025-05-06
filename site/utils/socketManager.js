@@ -20,7 +20,7 @@ class SocketManager {
     if (this.socket) return;
 
     this.log('Connecting to server on port 3001...');
-    this.socket = io('https://https://express.spectralo.hackclub.app/', {
+    this.socket = io('https://express.spectralo.hackclub.app', {
       path: '/socket.io',
       transports: ['polling', 'websocket'], // allow polling then upgrade
       withCredentials: true,
