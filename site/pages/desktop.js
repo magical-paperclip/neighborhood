@@ -2,7 +2,12 @@ import Head from "next/head";
 import Image from "next/image";
 import { Geist, Geist_Mono } from "next/font/google";
 import styles from "@/styles/Home.module.css";
-import NeighborhoodEnvironment from "@/components/NeighborhoodEnvironment";
+import dynamic from "next/dynamic";
+
+const NeighborhoodEnvironment = dynamic(
+  () => import("@/components/NeighborhoodEnvironment"),
+  { ssr: false },
+);
 import SignupComponent from "@/components/SignupComponent";
 import RewardsComponent from "@/components/RewardsComponent";
 import JournalComponent from "@/components/JournalComponent";
@@ -313,40 +318,42 @@ export default function Home() {
               />
             )}
           </div>
-
-          <div
-            style={{
-              position: "absolute",
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              height: "100vh",
-              width: "100vw",
-              zIndex: -100,
-              overflow: "hidden", // Prevents scrollbars if video overflows
-            }}
-          >
-            <video
-              autoPlay
-              loop
-              muted
-              playsInline
+          {!hasEnteredNeighborhood && (
+            <div
               style={{
-                width: "100%",
-                height: "100%",
-                objectFit: "cover", // This ensures the video covers the container
                 position: "absolute",
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                height: "100vh",
+                width: "100vw",
                 zIndex: -100,
-                top: "50%",
-                left: "50%",
-                transform: "translate(-50%, -50%)", // Centers the video
+                overflow: "hidden", // Prevents scrollbars if video overflows
               }}
             >
-              <source src="video.mp4" type="video/mp4" />
-              Your browser does not support the video tag.
-            </video>
-          </div>
+              <video
+                autoPlay
+                loop
+                muted
+                playsInline
+                style={{
+                  width: "100%",
+                  height: "100%",
+                  objectFit: "cover", // This ensures the video covers the container
+                  position: "absolute",
+                  zIndex: -100,
+                  top: "50%",
+                  left: "50%",
+                  transform: "translate(-50%, -50%)", // Centers the video
+                }}
+              >
+                <source src="video.mp4" type="video/mp4" />
+                Your browser does not support the video tag.
+              </video>
+            </div>
+          )}
+
           <div>
             <div
               style={{
