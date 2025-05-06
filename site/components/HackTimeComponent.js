@@ -182,6 +182,16 @@ const HackTimeComponent = ({
       console.log("Hackatime API response:", data.data.projects);
 
       setProjects(data.data.projects || []);
+      
+      // Initialize githubLinks from project data
+      const newGithubLinks = {};
+      data.data.projects.forEach(project => {
+        if (project.githubLink) {
+          newGithubLinks[project.name] = project.githubLink;
+        }
+      });
+      setGithubLinks(newGithubLinks);
+
       setLoadingState(prev => ({
         ...prev,
         counts: { ...prev.counts, projects: data.data.projects?.length || 0 }

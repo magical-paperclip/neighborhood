@@ -18,12 +18,11 @@ const BulletinComponent = ({ isExiting, onClose }) => {
     if (loading) return;
     setLoading(true);
     try {
-      let token = null;
-      if (window.electronAPI?.isElectron) {
-        token = await window.electronAPI.getToken();
-      } else {
-        token = localStorage.getItem('neighborhoodToken');
+      let token = localStorage.getItem('neighborhoodToken');
+      if (!token) {
+        token = getToken();
       }
+      
       console.log('Token:', token);
       if (!token) throw new Error("No token found");
 
