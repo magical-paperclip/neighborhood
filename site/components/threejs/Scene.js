@@ -4,16 +4,29 @@ import Clouds from "./Clouds";
 import Ground from "./Ground";
 import MapModel from "./MapModel";
 import PlayerModel from "./PlayerModel";
+import OtherPlayers from "./OtherPlayers";
 import Effects from "./Effects";
 import { useThree, useFrame } from "@react-three/fiber";
 import { useState, useEffect, useMemo } from "react";
+import { socketManager } from "../../utils/socketManager";
+import { Html } from "@react-three/drei";
 
 
 export default function Scene({ hasEnteredNeighborhood, setHasEnteredNeighborhood, isLoading, setIsLoading }) {
     const { scene, camera } = useThree();
     const containerRef = useRef(new THREE.Object3D());
     const fadeTimeRef = useRef(null);
+    const assetsLoadedRef = useRef({ texture: false, map: false, player: false });
     const [pointerLocked, setPointerLocked] = useState(false);
+    const [otherPlayers, setOtherPlayers] = useState(new Map());
+    const [connectionStatus, setConnectionStatus] = useState(socketManager.connected);
+    const debug = true;
+    
+    const log = (...args) => {
+      if (debug) {
+        console.log('[Scene]', ...args);
+      }
+    };
     
     // Movement state - track key states but let PlayerModel handle the actual movement
     const [moveState, setMoveState] = useState({
@@ -25,6 +38,17 @@ export default function Scene({ hasEnteredNeighborhood, setHasEnteredNeighborhoo
       space: false,
       escape: false
     });
+    
+    // Memoize moveState to prevent unnecessary re-renders
+    const memoizedMoveState = useMemo(() => moveState, [
+      moveState.w,
+      moveState.a,
+      moveState.s,
+      moveState.d,
+      moveState.shift,
+      moveState.space,
+      moveState.escape
+    ]);
     
     // Camera settings
     const cameraSettings = useMemo(() => ({
@@ -248,18 +272,74 @@ export default function Scene({ hasEnteredNeighborhood, setHasEnteredNeighborhoo
       }
     });
     
-    // Asset loading state tracking
-    const [assetsLoaded, setAssetsLoaded] = useState({ texture: false, map: false, player: false });
-    
-    useEffect(() => {
-      if (assetsLoaded.texture && assetsLoaded.map && assetsLoaded.player && isLoading) {
+    // Handle asset loading completion
+    const handleAssetLoaded = (assetType) => {
+      assetsLoadedRef.current[assetType] = true;
+      
+      // Check if all assets are loaded
+      const allLoaded = Object.values(assetsLoadedRef.current).every(Boolean);
+      if (allLoaded && isLoading) {
+        log('All assets loaded, completing loading state');
         setIsLoading(false);
         fadeTimeRef.current = Date.now();
       }
-    }, [assetsLoaded, isLoading, setIsLoading]);
+    };
+    
+    // Debug asset loading
+    useEffect(() => {
+      if (debug) {
+        const allLoaded = Object.values(assetsLoadedRef.current).every(Boolean);
+        if (allLoaded) {
+          log('Loading state:', {
+            isLoading,
+            hasEnteredNeighborhood
+          });
+        }
+      }
+    }, [isLoading, hasEnteredNeighborhood]);
+    
+    // Connect to Socket.IO when entering neighborhood
+    useEffect(() => {
+      if (hasEnteredNeighborhood) {
+        socketManager.onPlayersUpdate = (players) => {
+          setOtherPlayers(new Map(players));
+        };
+        socketManager.onConnectionStatusChange = (connected) => {
+          setConnectionStatus(connected);
+          if (!connected) {
+            // Clear other players when disconnected
+            setOtherPlayers(new Map());
+          }
+        };
+        socketManager.connect();
+
+        return () => {
+          socketManager.disconnect();
+          // Clear other players on cleanup
+          setOtherPlayers(new Map());
+        };
+      }
+    }, [hasEnteredNeighborhood]);
+    
+    // Debug multiplayer state
+    useEffect(() => {
+      if (debug) {
+        log('State changed:', {
+          hasEnteredNeighborhood,
+          isLoading,
+          otherPlayersCount: otherPlayers.size,
+          connectionStatus
+        });
+      }
+    }, [hasEnteredNeighborhood, isLoading, otherPlayers.size, connectionStatus]);
     
     return (
       <>
+        {/* UI overlay for connection and debug */}
+        <Html fullscreen style={{ position: 'absolute', top: 10, left: 10, color: 'white', background: 'rgba(0,0,0,0.5)', padding: '6px', fontSize: '12px', pointerEvents: 'none' }}>
+          <div>Connection: {connectionStatus ? '✅ Connected' : '❌ Disconnected'}</div>
+          <div>Players: {otherPlayers.size}</div>
+        </Html>
         {/* Scene lights - balanced intensity */}
         <ambientLight color={0xf4ccff} intensity={1.2} />
         <directionalLight position={[5, 5, 5]} intensity={1.1} />
@@ -269,18 +349,26 @@ export default function Scene({ hasEnteredNeighborhood, setHasEnteredNeighborhoo
         <Clouds />
         
         {/* Ground */}
-        <Ground onLoad={() => setAssetsLoaded(prev => ({ ...prev, texture: true }))} />
+        <Ground onLoad={() => handleAssetLoaded('texture')} />
         
         {/* Map */}
-        <MapModel onLoad={() => setAssetsLoaded(prev => ({ ...prev, map: true }))} />
+        <MapModel onLoad={() => handleAssetLoaded('map')} />
         
         {/* Player model */}
         <PlayerModel 
-          moveState={moveState}
+          moveState={memoizedMoveState}
           containerRef={containerRef}
-          onLoad={() => setAssetsLoaded(prev => ({ ...prev, player: true }))}
+          onLoad={() => handleAssetLoaded('player')}
           hasEnteredNeighborhood={hasEnteredNeighborhood}
         />
+
+        {/* Other players */}
+        {hasEnteredNeighborhood && !isLoading && (
+          <OtherPlayers 
+            players={otherPlayers} 
+            key={otherPlayers.size} // Force remount when players change
+          />
+        )}
         
         {/* Post-processing effects */}
         <Effects isLoading={isLoading} fadeTimeRef={fadeTimeRef} />

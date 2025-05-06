@@ -7,6 +7,7 @@ import logger from "morgan";
 import cors from "cors"; // Import the cors package
 
 import videoRouter from "./routes/video.js";
+import gameRouter from "./routes/game.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -29,6 +30,16 @@ app.use(cookieParser());
 app.use(express.static(path.join(__dirname, "public")));
 
 app.use("/video", videoRouter);
+app.use("/game", gameRouter);
+
+// For debugging purposes
+app.get("/api/status", (req, res) => {
+  res.json({
+    status: "running",
+    socketIO: "enabled",
+    timestamp: Date.now()
+  });
+});
 
 app.use(function (req, res, next) {
   next(createError(404));
