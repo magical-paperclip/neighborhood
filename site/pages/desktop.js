@@ -36,20 +36,23 @@ export default function Home() {
   // Handle clicks outside profile dropdown
   useEffect(() => {
     const handleClickOutside = (event) => {
-      const dropdown = document.getElementById('profile-dropdown');
-      const profileImage = document.getElementById('profile-image');
-      
-      if (dropdown && profileImage && 
-          !dropdown.contains(event.target) && 
-          !profileImage.contains(event.target)) {
+      const dropdown = document.getElementById("profile-dropdown");
+      const profileImage = document.getElementById("profile-image");
+
+      if (
+        dropdown &&
+        profileImage &&
+        !dropdown.contains(event.target) &&
+        !profileImage.contains(event.target)
+      ) {
         setProfileDropdown(false);
-        setConnectingSlack(false)
+        setConnectingSlack(false);
       }
     };
 
-    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener("mousedown", handleClickOutside);
     return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener("mousedown", handleClickOutside);
     };
   }, []);
 
@@ -160,7 +163,7 @@ export default function Home() {
 
     // Initialize audio
     banjoSound.current = new Audio("/banjo.mp3");
-    backgroundMusic.current = new Audio('/littlething.mp3');
+    backgroundMusic.current = new Audio("/littlething.mp3");
     backgroundMusic.current.loop = true;
   }, [hasEnteredNeighborhood]);
 
@@ -212,9 +215,9 @@ export default function Home() {
   // Fetch Slack users when connectingSlack becomes true
   useEffect(() => {
     if (connectingSlack) {
-      fetch('/api/getSlackUsers')
-        .then(res => res.json())
-        .then(data => setSlackUsers(data.users || []))
+      fetch("/api/getSlackUsers")
+        .then((res) => res.json())
+        .then((data) => setSlackUsers(data.users || []))
         .catch(() => setSlackUsers([]));
     }
   }, [connectingSlack]);
@@ -311,10 +314,38 @@ export default function Home() {
             )}
           </div>
 
-          <NeighborhoodEnvironment
-            hasEnteredNeighborhood={hasEnteredNeighborhood}
-            setHasEnteredNeighborhood={setHasEnteredNeighborhood}
-          />
+          <div
+            style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              height: "100vh",
+              width: "100vw",
+              overflow: "hidden", // Prevents scrollbars if video overflows
+            }}
+          >
+            <video
+              autoPlay
+              loop
+              muted
+              playsInline
+              style={{
+                width: "100%",
+                height: "100%",
+                objectFit: "cover", // This ensures the video covers the container
+                position: "absolute",
+                zIndex: -100,
+                top: "50%",
+                left: "50%",
+                transform: "translate(-50%, -50%)", // Centers the video
+              }}
+            >
+              <source src="video.mp4" type="video/mp4" />
+              Your browser does not support the video tag.
+            </video>
+          </div>
           <div>
             <div
               style={{
@@ -326,7 +357,15 @@ export default function Home() {
                 flexDirection: "column",
               }}
             >
-              <div style={{ position: "absolute", right: 16, top: 16, display: "flex", gap: 8}}>
+              <div
+                style={{
+                  position: "absolute",
+                  right: 16,
+                  top: 16,
+                  display: "flex",
+                  gap: 8,
+                }}
+              >
                 {!hasEnteredNeighborhood && (
                   <>
                     <div
@@ -341,17 +380,18 @@ export default function Home() {
                         borderRadius: 8,
                         cursor: "pointer",
                         border: "1px solid #B5B5B5",
-                        transition: "all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1)",
+                        transition:
+                          "all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1)",
                         transform: "scale(1)",
                         boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
                         ":hover": {
                           transform: "scale(1.05)",
-                          boxShadow: "0 4px 8px rgba(0,0,0,0.1)"
+                          boxShadow: "0 4px 8px rgba(0,0,0,0.1)",
                         },
                         ":active": {
                           transform: "scale(0.95)",
-                          boxShadow: "0 1px 2px rgba(0,0,0,0.05)"
-                        }
+                          boxShadow: "0 1px 2px rgba(0,0,0,0.05)",
+                        },
                       }}
                     >
                       <img
@@ -369,34 +409,89 @@ export default function Home() {
                     <div>
                       <img
                         id="profile-image"
-                        style={{width: 42, border: "1px solid #B5B5B5", backgroundColor: "#B5B5B5", borderRadius: 8, height: 42, cursor: "pointer"}}
+                        style={{
+                          width: 42,
+                          border: "1px solid #B5B5B5",
+                          backgroundColor: "#B5B5B5",
+                          borderRadius: 8,
+                          height: 42,
+                          cursor: "pointer",
+                        }}
                         src={userData?.profilePicture}
                         onClick={() => setProfileDropdown(true)}
                       />
-                      {profileDropdown && 
-                      <div id="profile-dropdown" style={{position: "absolute", display: "flex", flexDirection: "column", gap: 8, width: 240, top: 48, right: 0, padding: 8, borderRadius: 8, backgroundColor: "#fff", zIndex: 2,}}>
-                        <div style={{display: "flex", border: "1px solid #B5B5B5", borderRadius: 8, alignItems: "center", flexDirection: "row", gap: 8, padding: 8, minHeight: 40}}>
-                          {userData?.slackHandle ? (
-                            <>
-                              <img
-                                style={{width: 24, border: "1px solid #B5B5B5", backgroundColor: "#B5B5B5", borderRadius: 8, height: 24, cursor: "pointer"}}
-                                src={userData?.profilePicture}
-                                onClick={() => setProfileDropdown(true)}
-                              />
-                              <div>
-                              <p style={{fontSize: 14}}>@{userData?.slackHandle}</p>
-                              <p style={{fontSize: 8}}>Slack ID: {userData?.slackId}</p>
-                              </div>
-
-                            </>
-                          ) : (
-                            <span style={{fontSize: 14, color: '#b77', display: 'flex', alignItems: 'center', gap: 6}}>
-                              <span role="img" aria-label="warning">⚠️</span>
-                              We're not finding a slack profile attached to your account. Make sure you're using the same email as your slack account
-                            </span>
-                          )}
-                        </div>                    
-                        {/* {!connectingSlack ?
+                      {profileDropdown && (
+                        <div
+                          id="profile-dropdown"
+                          style={{
+                            position: "absolute",
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: 8,
+                            width: 240,
+                            top: 48,
+                            right: 0,
+                            padding: 8,
+                            borderRadius: 8,
+                            backgroundColor: "#fff",
+                            zIndex: 2,
+                          }}
+                        >
+                          <div
+                            style={{
+                              display: "flex",
+                              border: "1px solid #B5B5B5",
+                              borderRadius: 8,
+                              alignItems: "center",
+                              flexDirection: "row",
+                              gap: 8,
+                              padding: 8,
+                              minHeight: 40,
+                            }}
+                          >
+                            {userData?.slackHandle ? (
+                              <>
+                                <img
+                                  style={{
+                                    width: 24,
+                                    border: "1px solid #B5B5B5",
+                                    backgroundColor: "#B5B5B5",
+                                    borderRadius: 8,
+                                    height: 24,
+                                    cursor: "pointer",
+                                  }}
+                                  src={userData?.profilePicture}
+                                  onClick={() => setProfileDropdown(true)}
+                                />
+                                <div>
+                                  <p style={{ fontSize: 14 }}>
+                                    @{userData?.slackHandle}
+                                  </p>
+                                  <p style={{ fontSize: 8 }}>
+                                    Slack ID: {userData?.slackId}
+                                  </p>
+                                </div>
+                              </>
+                            ) : (
+                              <span
+                                style={{
+                                  fontSize: 14,
+                                  color: "#b77",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: 6,
+                                }}
+                              >
+                                <span role="img" aria-label="warning">
+                                  ⚠️
+                                </span>
+                                We're not finding a slack profile attached to
+                                your account. Make sure you're using the same
+                                email as your slack account
+                              </span>
+                            )}
+                          </div>
+                          {/* {!connectingSlack ?
                         <button
                          style={{backgroundColor: "#fff", cursor: "pointer", border: "1px solid #000", padding: 6, borderRadius: 6}}
                          onClick={() => setConnectingSlack(true)}
@@ -499,69 +594,95 @@ export default function Home() {
                         </div>
                         } */}
 
-                        {userData?.slackHandle && (
-                          <button 
+                          {userData?.slackHandle && (
+                            <button
+                              style={{
+                                backgroundColor: "#fff",
+                                cursor: "pointer",
+                                color: "#000",
+                                border: "1px solid #000",
+                                padding: 6,
+                                borderRadius: 6,
+                                marginBottom: 8,
+                              }}
+                              onClick={async () => {
+                                try {
+                                  let token =
+                                    localStorage.getItem("neighborhoodToken");
+                                  if (!token) {
+                                    token = getToken();
+                                  }
+                                  if (!token) {
+                                    throw new Error(
+                                      "No authentication token found",
+                                    );
+                                  }
+
+                                  const response = await fetch(
+                                    "/api/deleteSlackMember",
+                                    {
+                                      method: "POST",
+                                      headers: {
+                                        "Content-Type": "application/json",
+                                      },
+                                      body: JSON.stringify({ token }),
+                                    },
+                                  );
+
+                                  const data = await response.json();
+
+                                  if (!response.ok) {
+                                    throw new Error(
+                                      data.error ||
+                                        "Failed to disconnect Slack account",
+                                    );
+                                  }
+
+                                  // Update UI to remove Slack data
+                                  setUserData((prev) => ({
+                                    ...prev,
+                                    slackHandle: null,
+                                    profilePicture: null,
+                                    fullName: null,
+                                    slackId: null,
+                                  }));
+
+                                  setProfileDropdown(false);
+                                } catch (error) {
+                                  console.error(
+                                    "Error disconnecting Slack:",
+                                    error,
+                                  );
+                                  alert(
+                                    error.message ||
+                                      "Failed to disconnect Slack account",
+                                  );
+                                }
+                              }}
+                            >
+                              Disconnect Slack Account
+                            </button>
+                          )}
+
+                          <button
                             style={{
-                              backgroundColor: "#fff", 
-                              cursor: "pointer", 
-                              color: "#000", 
-                              border: "1px solid #000", 
-                              padding: 6, 
+                              backgroundColor: "#000",
+                              cursor: "pointer",
+                              color: "#fff",
+                              border: "1px solid #000",
+                              padding: 6,
                               borderRadius: 6,
-                              marginBottom: 8
                             }}
-                            onClick={async () => {
-                              try {
-                                let token = localStorage.getItem('neighborhoodToken');
-                                if (!token) {
-                                  token = getToken();
-                                }
-                                if (!token) {
-                                  throw new Error('No authentication token found');
-                                }
-
-                                const response = await fetch('/api/deleteSlackMember', {
-                                  method: 'POST',
-                                  headers: {
-                                    'Content-Type': 'application/json',
-                                  },
-                                  body: JSON.stringify({ token })
-                                });
-
-                                const data = await response.json();
-
-                                if (!response.ok) {
-                                  throw new Error(data.error || 'Failed to disconnect Slack account');
-                                }
-
-                                // Update UI to remove Slack data
-                                setUserData(prev => ({
-                                  ...prev,
-                                  slackHandle: null,
-                                  profilePicture: null,
-                                  fullName: null,
-                                  slackId: null
-                                }));
-
-                                setProfileDropdown(false);
-                              } catch (error) {
-                                console.error('Error disconnecting Slack:', error);
-                                alert(error.message || 'Failed to disconnect Slack account');
-                              }
+                            onClick={() => {
+                              setProfileDropdown(false);
+                              handleLogout();
                             }}
                           >
-                            Disconnect Slack Account
+                            Logout
                           </button>
-                        )}
-
-                        <button 
-                        style={{backgroundColor: "#000", cursor: "pointer", color: "#fff", border: "1px solid #000", padding: 6, borderRadius: 6}}
-                        onClick={() => {
-                          setProfileDropdown(false)
-                          handleLogout()
-                        }}>Logout</button>                    
-                      </div>}
-                      </div>
+                        </div>
+                      )}
+                    </div>
                   </>
                 )}
               </div>
