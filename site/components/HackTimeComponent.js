@@ -19,7 +19,8 @@ const HackTimeComponent = ({
   setConnectingSlack,
   searchSlack,
   setSearchSlack,
-  setUIPage
+  setUIPage,
+  isMuted
 }) => {
   const [timeTrackingMethod, setTimeTrackingMethod] = useState(""); // Default to stopwatch
   const [projects, setProjects] = useState([]);
@@ -94,7 +95,7 @@ const HackTimeComponent = ({
 
   // Add sound effect functions
   const playProjectCheckSound = () => {
-    if (piano) {
+    if (piano && !isMuted) {
       // Play an upward arpeggio for checking
       const notes = ["C4", "E4", "G4", "C5"];
       const delays = [0, 50, 100, 150];
@@ -105,7 +106,7 @@ const HackTimeComponent = ({
   };
 
   const playProjectUncheckSound = () => {
-    if (piano) {
+    if (piano && !isMuted) {
       // Play a downward arpeggio for unchecking
       const notes = ["C5", "G4", "E4", "C4"];
       const delays = [0, 50, 100, 150];
@@ -116,7 +117,7 @@ const HackTimeComponent = ({
   };
 
   const playExpandSound = () => {
-    if (piano) {
+    if (piano && !isMuted) {
       // Play a gentle chord for expanding
       const notes = ["E4", "A4", "B4"];
       const delays = [0, 30, 60];
@@ -127,7 +128,7 @@ const HackTimeComponent = ({
   };
 
   const playCollapseSound = () => {
-    if (piano) {
+    if (piano && !isMuted) {
       // Play a gentle descending chord for collapsing
       const notes = ["B4", "A4", "E4"];
       const delays = [0, 30, 60];
@@ -138,7 +139,7 @@ const HackTimeComponent = ({
   };
 
   const playGitHubConnectSound = () => {
-    if (piano) {
+    if (piano && !isMuted) {
       // Play a magical ascending sequence for GitHub connection
       const notes = ["C4", "E4", "G4", "C5", "E5"];
       const delays = [0, 50, 100, 150, 200];
@@ -1271,7 +1272,7 @@ const HackTimeComponent = ({
   };
 
   const playSessionMelody = (sessions, commitSha) => {
-    if (!piano || playedMelodies.has(commitSha)) return;
+    if (!piano || playedMelodies.has(commitSha) || isMuted) return;
 
     // Convert session duration to musical notes
     // We'll use a pentatonic scale for a pleasant sound
@@ -1861,11 +1862,13 @@ const HackTimeComponent = ({
         )}
         {timeTrackingMethod == "" && (
           <div style={{ position: "relative", width: "100%", height: "100%" }}>
-            <audio
-              autoPlay
-              src="/ChoiceToMake.mp3"
-              style={{ display: "none" }}
-            />
+            {!isMuted && (
+              <audio
+                autoPlay
+                src="/ChoiceToMake.mp3"
+                style={{ display: "none" }}
+              />
+            )}
             <div
               style={{
                 color: "#000",
@@ -2079,7 +2082,7 @@ const HackTimeComponent = ({
             >
               <HackTimeSelectionShader />
             </div>
-            {timeTrackingMethod === "" && (
+            {timeTrackingMethod === "" && !isMuted && (
               <audio
                 autoPlay
                 loop
