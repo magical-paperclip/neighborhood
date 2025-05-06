@@ -66,10 +66,7 @@ export default async function handler(req, res) {
       {
         id: neighborRecords[0].id,
         fields: {
-          slackId: null,
-          slackHandle: null,
-          profilePicture: null,
-          fullName: null
+          slackNeighbor: null
         }
       }
     ]);
