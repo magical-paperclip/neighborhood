@@ -253,10 +253,10 @@ export default function Home() {
           <div
             style={{
               position: "absolute",
-              top: "40px",
-              left: "40px",
-              right: "40px",
-              bottom: "40px",
+              top: "0px",
+              left: "0px",
+              right: "0px",
+              bottom: "0px",
               zIndex: 2,
               pointerEvents: UIPage || showNeighborhoodPopup ? "auto" : "none",
             }}
