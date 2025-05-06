@@ -513,6 +513,10 @@ export default function Home() {
                             onClick={async () => {
                               try {
                                 const token = localStorage.getItem('neighborhoodToken');
+                                if (!token) {
+                                  throw new Error('No authentication token found');
+                                }
+
                                 const response = await fetch('/api/deleteSlackMember', {
                                   method: 'POST',
                                   headers: {
@@ -521,9 +525,10 @@ export default function Home() {
                                   body: JSON.stringify({ token })
                                 });
 
+                                const data = await response.json();
+
                                 if (!response.ok) {
-                                  const errorData = await response.json();
-                                  throw new Error(errorData.error || 'Failed to disconnect Slack account');
+                                  throw new Error(data.error || 'Failed to disconnect Slack account');
                                 }
 
                                 // Update UI to remove Slack data

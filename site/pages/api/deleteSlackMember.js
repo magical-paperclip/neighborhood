@@ -1,5 +1,12 @@
 import Airtable from 'airtable';
 
+// Add body parser configuration
+export const config = {
+  api: {
+    bodyParser: true,
+  },
+};
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -7,7 +14,12 @@ export default async function handler(req, res) {
 
   const { token } = req.body;
 
+  // Add debug logging
+  console.log('Request body:', req.body);
+  console.log('Token received:', token);
+
   if (!token) {
+    console.log('Token is missing from request body');
     return res.status(400).json({ error: 'Token is required' });
   }
 
@@ -15,7 +27,7 @@ export default async function handler(req, res) {
     // Initialize Airtable with the correct base ID
     const base = new Airtable({ 
       apiKey: process.env.AIRTABLE_API_KEY 
-    }).base('appnsN4MzbnfMY0ai');
+    }).base(process.env.AIRTABLE_BASE_ID);
 
     // First, find the neighbor record using the token
     const neighborRecords = await base('neighbors')
@@ -26,10 +38,12 @@ export default async function handler(req, res) {
       .all();
 
     if (neighborRecords.length === 0) {
+      console.log('No neighbor found with token:', token);
       return res.status(404).json({ error: 'No neighbor found with this token' });
     }
 
     const userEmail = neighborRecords[0].fields.email;
+    console.log('Found user email:', userEmail);
 
     // Find and delete the Slack member record
     const slackMemberRecords = await base('#neighborhoodSlackMembers')
@@ -39,11 +53,26 @@ export default async function handler(req, res) {
       .all();
 
     if (slackMemberRecords.length === 0) {
+      console.log('No Slack member record found for email:', userEmail);
       return res.status(404).json({ error: 'No Slack member record found for this user' });
     }
 
     // Delete the record
     await base('#neighborhoodSlackMembers').destroy(slackMemberRecords[0].id);
+    console.log('Successfully deleted Slack member record for:', userEmail);
+
+    // Also update the neighbor record to remove Slack-related fields
+    await base('neighbors').update([
+      {
+        id: neighborRecords[0].id,
+        fields: {
+          slackId: null,
+          slackHandle: null,
+          profilePicture: null,
+          fullName: null
+        }
+      }
+    ]);
 
     return res.status(200).json({ 
       success: true,
