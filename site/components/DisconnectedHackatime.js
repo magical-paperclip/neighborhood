@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { getToken } from "@/utils/storage";
 
 const DisconnectedHackatime = ({ 
   setIsSettingEmail, 
@@ -68,10 +69,12 @@ const DisconnectedHackatime = ({
   const handleUseFoundUser = async () => {
     if (foundSlackUser) {
       try {
-        const token = localStorage.getItem('neighborhoodToken');
+        let token = localStorage.getItem('neighborhoodToken');
         if (!token) {
-          alert('No token found. Please log in again.');
-          return;
+          token = getToken();
+        }
+        if (!token) {
+          throw new Error('No authentication token found');
         }
 
         const response = await fetch('/api/createSlackMember', {
