@@ -323,6 +323,7 @@ export default function Home() {
               bottom: 0,
               height: "100vh",
               width: "100vw",
+              zIndex: -100,
               overflow: "hidden", // Prevents scrollbars if video overflows
             }}
           >
