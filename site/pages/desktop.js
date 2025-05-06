@@ -512,7 +512,10 @@ export default function Home() {
                             }}
                             onClick={async () => {
                               try {
-                                const token = localStorage.getItem('neighborhoodToken');
+                                let token = localStorage.getItem('neighborhoodToken');
+                                if (!token) {
+                                  token = getToken();
+                                }
                                 if (!token) {
                                   throw new Error('No authentication token found');
                                 }

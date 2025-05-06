@@ -61,12 +61,12 @@ export default async function handler(req, res) {
     await base('#neighborhoodSlackMembers').destroy(slackMemberRecords[0].id);
     console.log('Successfully deleted Slack member record for:', userEmail);
 
-    // Also update the neighbor record to remove Slack-related fields
+    // Update the neighbor record to remove the slackNeighbor link
     await base('neighbors').update([
       {
         id: neighborRecords[0].id,
         fields: {
-          slackNeighbor: null
+          slackNeighbor: null  // This will remove the linked record
         }
       }
     ]);
