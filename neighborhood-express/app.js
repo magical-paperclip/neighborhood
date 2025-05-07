@@ -11,17 +11,28 @@ import simonSaysController from "./controllers/simonSaysController.js";
 
 import videoRouter from "./routes/video.js";
 import gameRouter from "./routes/game.js";
+import { setClientsReference } from "./routes/game.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
+
+// Trust proxy headers from Coolify or other reverse proxies
+app.set('trust proxy', true);
+
 const httpServer = http.createServer(app);
 const ioServer = new Server(httpServer, {
   cors: {
     origin: "*",
-    methods: ["GET", "POST"]
-  }
+    methods: ["GET", "POST", "OPTIONS"],
+    credentials: true,
+    allowedHeaders: ["Content-Type", "Authorization"]
+  },
+  transports: ['websocket', 'polling'],
+  allowEIO3: true,
+  pingTimeout: 60000,
+  path: '/socket.io'
 });
 
 const players = new Map();
@@ -38,11 +49,13 @@ ioServer.on('connection', (socket) => {
     }
   }
   
-  // Send current player state immediately
+  // Send current player state immediately and log it
+  console.log(`[APP] Sending playersUpdate to new player. Current players: ${players.size}`);
   socket.emit('playersUpdate', Array.from(players.entries()));
   
   socket.on('updateTransform', (data) => {
     if (!players.has(socket.id)) {
+      console.log(`[APP] Adding new player to map: ${socket.id}`);
       players.set(socket.id, {
         position: data.position,
         quaternion: data.quaternion,
@@ -88,6 +101,7 @@ ioServer.on('connection', (socket) => {
     }
     
     // Broadcast to all clients except sender
+    console.log(`[APP] Broadcasting playersUpdate. Current players: ${players.size}`);
     socket.broadcast.emit('playersUpdate', Array.from(players.entries()));
   });
 
@@ -133,6 +147,7 @@ app.use(
     origin: "*",
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
+    credentials: true
   })
 );
 
@@ -144,6 +159,9 @@ app.use(express.static(path.join(__dirname, "public")));
 
 app.use("/video", videoRouter);
 app.use("/game", gameRouter);
+
+// Set up players map reference for the game router
+setClientsReference(players);
 
 app.get("/api/status", (req, res) => {
   res.json({

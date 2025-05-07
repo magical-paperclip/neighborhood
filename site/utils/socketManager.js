@@ -24,13 +24,43 @@ class SocketManager {
   connect() {
     if (this.socket) return;
 
-    this.log('Connecting to server on port 3002...');
-    this.socket = io('https://express.spectralo.hackclub.app/', {
+    this.log('Connecting to server...');
+    
+    // Use the Hack Club selfhosted URL
+    const socketUrl = 'https://vgso8kg840ss8cok4s4cwwgk.a.selfhosted.hackclub.com';
+    
+    this.log(`Using socket URL: ${socketUrl}`);
+    
+    // Simpler configuration focused on compatibility
+    this.socket = io(socketUrl, {
       transports: ['websocket', 'polling'],
       reconnection: true,
-      reconnectionAttempts: Infinity,
+      reconnectionAttempts: 5,
       reconnectionDelay: 1000,
-      autoConnect: true
+      timeout: 10000,
+      forceNew: true
+    });
+
+    // Set a connection timeout
+    const connectionTimeout = setTimeout(() => {
+      if (!this.connected) {
+        this.log('Connection timed out, trying to reconnect...');
+        // Try again with polling only if websocket failed
+        if (this.socket) {
+          this.socket.disconnect();
+          this.socket = io(socketUrl, {
+            transports: ['polling'],
+            reconnection: true,
+            timeout: 10000
+          });
+          this.setupEventHandlers();
+        }
+      }
+    }, 5000);
+
+    // Clear the timeout if we connect successfully
+    this.socket.on('connect', () => {
+      clearTimeout(connectionTimeout);
     });
 
     this.setupEventHandlers();
@@ -40,6 +70,27 @@ class SocketManager {
     // Listen for connection errors and reconnection attempts
     this.socket.on('connect_error', (err) => {
       this.log('Connection error:', err.message);
+      console.error('[SocketManager] Connection error details:', err);
+      this.onConnectionStatusChange?.(false);
+    });
+
+    this.socket.on('reconnect_attempt', (attemptNumber) => {
+      this.log(`Reconnection attempt ${attemptNumber}...`);
+    });
+
+    this.socket.on('reconnect_failed', () => {
+      this.log('Failed to reconnect after all attempts');
+      this.onConnectionStatusChange?.(false);
+    });
+
+    this.socket.on('error', (error) => {
+      this.log('Socket error:', error);
+      console.error('[SocketManager] Socket error:', error);
+    });
+
+    this.socket.io.on('error', (error) => {
+      this.log('Transport error:', error);
+      console.error('[SocketManager] Transport error:', error);
     });
 
     this.socket.on('connect', () => {
@@ -49,6 +100,7 @@ class SocketManager {
     });
 
     this.socket.on('playersUpdate', (players) => {
+      this.log(`Received playersUpdate event with ${players.length} players`);
       this.players.clear(); // Clear existing players first
       players.forEach(([id, player]) => {
         if (id !== this.socket.id) {
@@ -56,6 +108,7 @@ class SocketManager {
         }
       });
       this.onPlayersUpdate?.(this.players);
+      this.log(`Updated players map: ${this.players.size} players`);
     });
 
     this.socket.on('disconnect', (reason) => {
