@@ -68,6 +68,7 @@ const HackTimeComponent = ({
       commits: 0
     }
   });
+  const [hoveredGithubLink, setHoveredGithubLink] = useState(null);
 
   // Add debounce helper at the top level of the component
   const debounce = (func, wait) => {
@@ -1709,6 +1710,56 @@ const HackTimeComponent = ({
     }
   `;
 
+  const handleGithubDisconnect = async (projectName) => {
+    try {
+      const token = getToken();
+      if (!token) {
+        throw new Error("No token found");
+      }
+
+      const response = await fetch("/api/disconnectGithub", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          token,
+          projectName,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to disconnect GitHub repository");
+      }
+
+      // Update local state
+      setGithubLinks((prev) => {
+        const newState = { ...prev };
+        delete newState[projectName];
+        return newState;
+      });
+
+      // Clear commit data for this project
+      setCommitData((prev) => {
+        const newState = { ...prev };
+        delete newState[projectName];
+        return newState;
+      });
+
+      // Clear session commit matches
+      setSessionCommitMatches((prev) => {
+        const newState = { ...prev };
+        delete newState[projectName];
+        return newState;
+      });
+
+      showAlert("GitHub repository disconnected successfully");
+    } catch (error) {
+      console.error("Error disconnecting GitHub:", error);
+      showAlert("Failed to disconnect GitHub repository");
+    }
+  };
+
   return (
     <div
       className={`pop-in ${isExiting ? "hidden" : ""}`}
@@ -2226,18 +2277,19 @@ const HackTimeComponent = ({
                               ) : null}
                               {githubLinks[project.name] ? (
                                 <span
+                                  onClick={() => handleGithubDisconnect(project.name)}
+                                  onMouseEnter={() => setHoveredGithubLink(project.name)}
+                                  onMouseLeave={() => setHoveredGithubLink(null)}
                                   style={{
                                     fontSize: "12px",
-                                    color: "#666",
+                                    color: hoveredGithubLink === project.name ? "#ef758a" : "#666",
                                     opacity: 0.8,
+                                    cursor: "pointer",
+                                    textDecoration: hoveredGithubLink === project.name ? "line-through" : "underline",
+                                    transition: "all 0.2s ease"
                                   }}
                                 >
-                                  (
-                                  {githubLinks[project.name].replace(
-                                    /https?:\/\/github\.com\//,
-                                    "",
-                                  )}
-                                  )
+                                  ({githubLinks[project.name].replace(/https?:\/\/github\.com\//, "")})
                                 </span>
                               ) : projectChecked ? (
                                 <span
