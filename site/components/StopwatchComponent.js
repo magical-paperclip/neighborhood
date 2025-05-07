@@ -340,7 +340,7 @@ const StopwatchComponent = ({ onClose, onAddProject, isExiting, userData }) => {
         // Format the projects data
         const projectNames = projects.map((project) => ({
           id: project.id,
-          name: project.fields.name || "Unnamed Project",
+          name: project.fields.name || "-",
         }));
 
         console.log("Project Names:", projectNames);
@@ -999,7 +999,7 @@ const StopwatchComponent = ({ onClose, onAddProject, isExiting, userData }) => {
                     background: "transparent",
                   }}
                 >
-                  {commit.fields.hackatimeProject || "-"}
+                  {commit.projectName || "-"}
                 </td>
                 <td
                   style={{
