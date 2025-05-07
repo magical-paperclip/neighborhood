@@ -266,7 +266,7 @@ export default function Home() {
               left: "40px",
               right: "40px",
               bottom: "40px",
-              zIndex: 2,
+              zIndex: 10,
               pointerEvents: UIPage || showNeighborhoodPopup ? "auto" : "none",
             }}
           >
@@ -362,7 +362,7 @@ export default function Home() {
             />
           )}
 
-          <div style={{ position: "relative", zIndex: 2 }}>
+          <div style={{ position: "relative", zIndex: 5 }}>
             <div
               style={{
                 height: "100vh",
