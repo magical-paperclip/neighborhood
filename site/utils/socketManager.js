@@ -31,36 +31,14 @@ class SocketManager {
     
     this.log(`Using socket URL: ${socketUrl}`);
     
-    // Simpler configuration focused on compatibility
+    // Force polling transport only to avoid WebSocket issues
     this.socket = io(socketUrl, {
-      transports: ['websocket', 'polling'],
+      transports: ['polling'],
       reconnection: true,
       reconnectionAttempts: 5,
       reconnectionDelay: 1000,
-      timeout: 10000,
+      timeout: 20000,
       forceNew: true
-    });
-
-    // Set a connection timeout
-    const connectionTimeout = setTimeout(() => {
-      if (!this.connected) {
-        this.log('Connection timed out, trying to reconnect...');
-        // Try again with polling only if websocket failed
-        if (this.socket) {
-          this.socket.disconnect();
-          this.socket = io(socketUrl, {
-            transports: ['polling'],
-            reconnection: true,
-            timeout: 10000
-          });
-          this.setupEventHandlers();
-        }
-      }
-    }, 5000);
-
-    // Clear the timeout if we connect successfully
-    this.socket.on('connect', () => {
-      clearTimeout(connectionTimeout);
     });
 
     this.setupEventHandlers();
@@ -97,18 +75,33 @@ class SocketManager {
       this.connected = true;
       this.log('Connected to server with ID:', this.socket.id);
       this.onConnectionStatusChange?.(true);
+      
+      // Request initial players data - important fix for player sync
+      this.socket.emit('requestPlayers');
     });
 
     this.socket.on('playersUpdate', (players) => {
       this.log(`Received playersUpdate event with ${players.length} players`);
-      this.players.clear(); // Clear existing players first
-      players.forEach(([id, player]) => {
-        if (id !== this.socket.id) {
-          this.players.set(id, player);
+      
+      try {
+        this.players.clear(); // Clear existing players first
+        
+        if (Array.isArray(players)) {
+          players.forEach(([id, player]) => {
+            if (id !== this.socket.id) {
+              this.players.set(id, player);
+            }
+          });
+        } else {
+          this.log('Warning: players is not an array:', players);
         }
-      });
-      this.onPlayersUpdate?.(this.players);
-      this.log(`Updated players map: ${this.players.size} players`);
+        
+        this.onPlayersUpdate?.(this.players);
+        this.log(`Updated players map: ${this.players.size} players`);
+      } catch (err) {
+        this.log('Error processing players update:', err);
+        console.error('[SocketManager] Error processing players:', err);
+      }
     });
 
     this.socket.on('disconnect', (reason) => {

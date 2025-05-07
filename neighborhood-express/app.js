@@ -29,11 +29,24 @@ const ioServer = new Server(httpServer, {
     credentials: true,
     allowedHeaders: ["Content-Type", "Authorization"]
   },
-  transports: ['websocket', 'polling'],
+  transports: ['polling', 'websocket'],
   allowEIO3: true,
   pingTimeout: 60000,
+  pingInterval: 25000,
+  connectTimeout: 30000,
   path: '/socket.io'
 });
+
+// Debug players map state
+function logPlayersMap() {
+  console.log(`[APP] Current players (${players.size}):`);
+  players.forEach((player, id) => {
+    console.log(`- Player ${id}: pos=${JSON.stringify(player.position)}`);
+  });
+}
+
+// Set interval to log players state
+setInterval(logPlayersMap, 30000);
 
 const players = new Map();
 
@@ -52,6 +65,12 @@ ioServer.on('connection', (socket) => {
   // Send current player state immediately and log it
   console.log(`[APP] Sending playersUpdate to new player. Current players: ${players.size}`);
   socket.emit('playersUpdate', Array.from(players.entries()));
+  
+  // Handle explicit player data requests
+  socket.on('requestPlayers', () => {
+    console.log(`[APP] Player ${socket.id} explicitly requested players data. Current players: ${players.size}`);
+    socket.emit('playersUpdate', Array.from(players.entries()));
+  });
   
   socket.on('updateTransform', (data) => {
     if (!players.has(socket.id)) {
@@ -103,6 +122,13 @@ ioServer.on('connection', (socket) => {
     // Broadcast to all clients except sender
     console.log(`[APP] Broadcasting playersUpdate. Current players: ${players.size}`);
     socket.broadcast.emit('playersUpdate', Array.from(players.entries()));
+    
+    // Every 5th update (or so), also send a full sync to all clients including sender
+    // This helps ensure that clients that missed updates get in sync
+    if (Math.random() < 0.2) { // ~20% chance to do a full sync
+      console.log(`[APP] Sending full sync to all clients. Current players: ${players.size}`);
+      ioServer.emit('playersUpdate', Array.from(players.entries()));
+    }
   });
 
   socket.on('startSimonSays', () => {
