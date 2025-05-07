@@ -9,12 +9,38 @@ import { RigidBody, CapsuleCollider, useRapier } from "@react-three/rapier";
 import { socketManager } from "../../utils/socketManager";
 import { loadPlayerModel, getPlayerModelClone, getCachedAnimations, setCachedModel } from "../../utils/playerCloning";
 
-export default function PlayerModel({ onLoad, moveState, containerRef, hasEnteredNeighborhood }) {
+// Debug helper for raycasting
+const DebugRaycast = ({ start, end, color = 0xff0000, enabled = false }) => {
+  if (!enabled) return null;
+  
+  // Create points for line
+  const points = [start, end].map(p => new THREE.Vector3(p.x, p.y, p.z));
+  const lineGeometry = new THREE.BufferGeometry().setFromPoints(points);
+  
+  // Return the debug line
+  return (
+    <line geometry={lineGeometry}>
+      <lineBasicMaterial color={color} />
+    </line>
+  );
+};
+
+export default function PlayerModel({ 
+  onLoad, 
+  moveState, 
+  containerRef, 
+  hasEnteredNeighborhood,
+  rotationRef,
+  pitchRef
+}) {
   const toonGradient = useMemo(() => createToonGradient(), []);
   const onLoadCalledRef = useRef(false);
   
   // Load the model using useGLTF hook
   const { scene: rawModel, animations } = useGLTF('/models/player.glb');
+  
+  // Scene access for raycasting
+  const { scene } = useThree();
   
   // Set the cached model on first load
   useEffect(() => {
@@ -41,8 +67,6 @@ export default function PlayerModel({ onLoad, moveState, containerRef, hasEntere
   const debug = true;
   
   // Mouse control
-  const rotationRef = useRef(0); // Yaw rotation only
-  const pitchRef = useRef(0);    // Pitch rotation (up/down)
   const canvasRef = useRef(null);
   
   // Performance optimization for physics
@@ -75,6 +99,22 @@ export default function PlayerModel({ onLoad, moveState, containerRef, hasEntere
   const CAMERA_HEIGHT = 4;    // Moderate height
   const MOUSE_SENSITIVITY = 0.002;
   const PITCH_LIMIT = Math.PI/3; // Limit vertical rotation to 60 degrees
+  const MIN_CAMERA_DISTANCE = 2.0; // Minimum distance to maintain from player
+  
+  // Camera collision prevention
+  const raycaster = useMemo(() => new THREE.Raycaster(), []);
+  const idealCameraPosition = useMemo(() => new THREE.Vector3(), []);
+  const raycastFilterRef = useRef(new Set());
+  const lastCameraPos = useRef(new THREE.Vector3());
+  const CAMERA_LERP_FACTOR = 0.2; // Smoothing factor
+  
+  // Debug state for camera collisions
+  const [debugRaycast, setDebugRaycast] = useState({ 
+    start: new THREE.Vector3(), 
+    end: new THREE.Vector3(),
+    hit: new THREE.Vector3()
+  });
+  const debugEnabled = false; // Set to true to enable visual debugging
   
   const log = (...args) => {
     if (debug) {
@@ -106,30 +146,64 @@ export default function PlayerModel({ onLoad, moveState, containerRef, hasEntere
     };
     
     // Capture click to make control more responsive
-    const handleClick = () => {
-      if (canvasRef.current && hasEnteredNeighborhood) {
+    const handleClick = (e) => {
+      console.log('Click detected in PlayerModel', {
+        target: e.target,
+        isUIElement: !!e.target.closest('[data-ui-element="true"]'),
+        pointerLocked: document.pointerLockElement === canvasRef.current,
+        eventPhase: e.eventPhase
+      });
+
+      // Check if we clicked on a UI element
+      const isUIElement = e.target.closest('[data-ui-element="true"]');
+      
+      if (isUIElement) {
+        console.log('UI element clicked, releasing pointer lock');
+        // If clicking UI, ensure pointer is unlocked
+        if (document.pointerLockElement === canvasRef.current) {
+          document.exitPointerLock();
+          console.log('Pointer lock released');
+        }
+        return; // Let the click event propagate to the UI element
+      }
+      
+      // Only request pointer lock if we're in the neighborhood and clicked outside UI
+      if (canvasRef.current && hasEnteredNeighborhood && !isUIElement) {
         try {
+          console.log('Requesting pointer lock');
           canvasRef.current.requestPointerLock();
         } catch (error) {
-          // Ignore errors
+          console.error('Pointer lock request failed:', error);
         }
+      }
+    };
+
+    // Handle pointer lock change
+    const handlePointerLockChange = () => {
+      const isLocked = document.pointerLockElement === canvasRef.current;
+      console.log('Pointer lock changed:', { isLocked });
+      // You might want to update some state here if needed
+      if (!isLocked) {
+        // Reset any necessary state when pointer lock is released
       }
     };
     
     // Set up event listeners
     document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('click', handleClick);
+    document.addEventListener('click', handleClick, true); // Use capture phase
+    document.addEventListener('pointerlockchange', handlePointerLockChange);
     
-    // Initial request
+    // Initial request - but don't auto-lock if there's UI interaction
     setTimeout(() => {
-      if (canvasRef.current && hasEnteredNeighborhood) {
+      if (canvasRef.current && hasEnteredNeighborhood && !document.querySelector('[data-ui-element="true"]:hover')) {
         canvasRef.current.requestPointerLock();
       }
     }, 500);
     
     return () => {
       document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('click', handleClick);
+      document.removeEventListener('click', handleClick, true);
+      document.removeEventListener('pointerlockchange', handlePointerLockChange);
     };
   }, [gl, hasEnteredNeighborhood]);
   
@@ -230,13 +304,103 @@ export default function PlayerModel({ onLoad, moveState, containerRef, hasEntere
         );
         direction.normalize();
         
-        cameraPos.set(
+        // Calculate ideal camera position
+        idealCameraPosition.set(
           pos.x + direction.x * CAMERA_DISTANCE * Math.cos(pitchRef.current),
           pos.y + CAMERA_HEIGHT + direction.y * CAMERA_DISTANCE,
           pos.z + direction.z * CAMERA_DISTANCE * Math.cos(pitchRef.current)
         );
         
-        camera.position.copy(cameraPos);
+        // Set up raycaster from player position to ideal camera position
+        const playerPosition = new THREE.Vector3(pos.x, pos.y + 1, pos.z);
+        const cameraDirection = new THREE.Vector3().subVectors(idealCameraPosition, playerPosition).normalize();
+        raycaster.set(playerPosition, cameraDirection);
+        
+        // Update debug raycast data if enabled
+        if (debugEnabled) {
+          setDebugRaycast({
+            start: playerPosition.clone(),
+            end: idealCameraPosition.clone(),
+            hit: null
+          });
+        }
+        
+        // Perform raycast and get the real camera position
+        raycaster.set(playerPosition, cameraDirection);
+        let intersects = [];
+        
+        try {
+          // Make sure scene is valid before attempting to raycast
+          if (scene && Array.isArray(scene.children)) {
+            intersects = raycaster.intersectObjects(scene.children, true)
+              .filter(hit => {
+                // Skip invalid hit objects
+                if (!hit || !hit.object) return false;
+                
+                // Skip player model and other objects we want to ignore
+                let obj = hit.object;
+                while (obj) {
+                  if (raycastFilterRef.current.has(obj)) return false;
+                  obj = obj.parent;
+                }
+                
+                // Skip objects with specific names or types we want to ignore
+                // Such as clouds, invisible collision planes, etc.
+                if (hit.object.name && (
+                    hit.object.name.includes('cloud') || 
+                    hit.object.name.includes('sky') ||
+                    hit.object.userData?.ignoreRaycast)) {
+                  return false;
+                }
+                
+                return true;
+              });
+          }
+        } catch (error) {
+          console.error("Raycast error:", error);
+        }
+        
+        // If there's an intersection between player and ideal camera position
+        if (intersects && intersects.length > 0) {
+          const firstHit = intersects[0];
+          if (firstHit && typeof firstHit.distance === 'number') {
+            const distanceToHit = firstHit.distance;
+            
+            // Update debug hit position if enabled
+            if (debugEnabled && firstHit.point) {
+              setDebugRaycast(prev => ({
+                ...prev,
+                hit: firstHit.point.clone()
+              }));
+            }
+            
+            // If hit distance is less than the ideal camera distance
+            if (distanceToHit < playerPosition.distanceTo(idealCameraPosition)) {
+              // Place camera slightly in front of the hit point (buffer of 0.5)
+              const adjustedDistance = Math.max(distanceToHit - 0.5, MIN_CAMERA_DISTANCE);
+              cameraPos.copy(playerPosition).add(cameraDirection.multiplyScalar(adjustedDistance));
+            } else {
+              // No obstruction, use ideal position
+              cameraPos.copy(idealCameraPosition);
+            }
+          } else {
+            // Invalid hit data, use ideal position
+            cameraPos.copy(idealCameraPosition);
+          }
+        } else {
+          // No obstruction, use ideal position
+          cameraPos.copy(idealCameraPosition);
+        }
+        
+        // Apply smoothing if we have a previous position
+        if (lastCameraPos.current.lengthSq() > 0) {
+          camera.position.lerpVectors(lastCameraPos.current, cameraPos, CAMERA_LERP_FACTOR);
+        } else {
+          camera.position.copy(cameraPos);
+        }
+        
+        // Store current position for next frame
+        lastCameraPos.current.copy(camera.position);
         
         lookAtPos.set(
           pos.x,
@@ -247,27 +411,20 @@ export default function PlayerModel({ onLoad, moveState, containerRef, hasEntere
         camera.lookAt(lookAtPos);
       } else {
         // Make player face the camera when not in neighborhood
-        // Calculate angle from player to camera
         const cameraPosition = camera.position;
         const directionToCamera = new THREE.Vector3(
           cameraPosition.x - pos.x,
-          0, // Ignore Y component for horizontal rotation
+          0,
           cameraPosition.z - pos.z
         ).normalize();
         
-        // Calculate rotation angle
         const angleToCamera = Math.atan2(directionToCamera.x, directionToCamera.z);
-        
-        // Apply rotation to face camera with a slight offset to the right (negative angle)
-        const rightwardOffset = -0.3; // Adjust this value to control how much right the character looks
+        const rightwardOffset = -0.3;
         containerRef.current.rotation.y = angleToCamera + rightwardOffset;
         
         if (primitiveRef.current) {
           primitiveRef.current.rotation.y = angleToCamera - Math.PI/2 + rightwardOffset;
         }
-        
-        // Store this rotation so it's available when entering neighborhood
-        rotationRef.current = angleToCamera + rightwardOffset;
       }
       
       // Calculate movement direction
@@ -363,7 +520,7 @@ export default function PlayerModel({ onLoad, moveState, containerRef, hasEntere
         containerRef.current.position.set(pos.x, pos.y, pos.z);
       }
 
-      // Send position and rotation updates to server
+      // Send position and movement state updates to server
       if (shouldUpdateNetwork && hasEnteredNeighborhood) {
         lastNetworkUpdate.current = now;
         
@@ -377,21 +534,23 @@ export default function PlayerModel({ onLoad, moveState, containerRef, hasEntere
         
         // Only send updates if socket is connected
         if (socketManager.connected) {
-          log('Sending position update:', {
-            position,
-            quaternion: {
-              x: quaternion.x,
-              y: quaternion.y,
-              z: quaternion.z,
-              w: quaternion.w
-            },
-            isMoving
-          });
+          // log('Sending position update:', {
+          //   position,
+          //   quaternion: {
+          //     x: quaternion.x,
+          //     y: quaternion.y,
+          //     z: quaternion.z,
+          //     w: quaternion.w
+          //   },
+          //   isMoving,
+          //   moveState
+          // });
           
           socketManager.updateTransform(
             position,
             { x: quaternion.x, y: quaternion.y, z: quaternion.z, w: quaternion.w },
-            isMoving
+            isMoving,
+            moveState
           );
         }
       }
@@ -440,6 +599,18 @@ export default function PlayerModel({ onLoad, moveState, containerRef, hasEntere
     log('Neighborhood state changed:', hasEnteredNeighborhood);
   }, [hasEnteredNeighborhood]);
   
+  // Configure player model
+  useEffect(() => {
+    if (!playerModel) return;
+    
+    // Add player model to raycast ignore list
+    raycastFilterRef.current.add(playerModel);
+    
+    return () => {
+      raycastFilterRef.current.delete(playerModel);
+    };
+  }, [playerModel]);
+  
   return (
     <>
       <RigidBody 
@@ -465,6 +636,24 @@ export default function PlayerModel({ onLoad, moveState, containerRef, hasEntere
         scale={[0.027, 0.027, 0.027]}
         rotation={[0, -Math.PI/2, 0]}
       />
+      
+      {/* Debug visualization */}
+      {debugEnabled && (
+        <>
+          <DebugRaycast 
+            start={debugRaycast.start} 
+            end={debugRaycast.end} 
+            color={0x00ff00} 
+            enabled={debugEnabled}
+          />
+          {debugRaycast.hit && (
+            <mesh position={debugRaycast.hit}>
+              <sphereGeometry args={[0.2, 8, 8]} />
+              <meshBasicMaterial color={0xff0000} />
+            </mesh>
+          )}
+        </>
+      )}
     </>
   );
 }

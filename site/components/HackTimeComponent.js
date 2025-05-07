@@ -8,9 +8,9 @@ import DisconnectedHackatime from "./DisconnectedHackatime";
 
 const BOARD_BAR_HEIGHT = 50;
 
-const HackTimeComponent = ({ 
-  isExiting, 
-  onClose, 
+const HackTimeComponent = ({
+  isExiting,
+  onClose,
   userData,
   setUserData,
   slackUsers,
@@ -20,7 +20,7 @@ const HackTimeComponent = ({
   searchSlack,
   setSearchSlack,
   setUIPage,
-  isMuted
+  isMuted,
 }) => {
   const [timeTrackingMethod, setTimeTrackingMethod] = useState(""); // Default to stopwatch
   const [projects, setProjects] = useState([]);
@@ -65,8 +65,8 @@ const HackTimeComponent = ({
     counts: {
       projects: 0,
       sessions: 0,
-      commits: 0
-    }
+      commits: 0,
+    },
   });
   const [hoveredGithubLink, setHoveredGithubLink] = useState(null);
 
@@ -157,7 +157,7 @@ const HackTimeComponent = ({
         sessions: false,
         commits: false,
         message: "Loading projects...",
-        counts: { projects: 0, sessions: 0, commits: 0 }
+        counts: { projects: 0, sessions: 0, commits: 0 },
       });
       console.log("Starting fetchHackatimeData");
       const token = getToken();
@@ -183,19 +183,19 @@ const HackTimeComponent = ({
       console.log("Hackatime API response:", data.data.projects);
 
       setProjects(data.data.projects || []);
-      
+
       // Initialize githubLinks from project data
       const newGithubLinks = {};
-      data.data.projects.forEach(project => {
+      data.data.projects.forEach((project) => {
         if (project.githubLink) {
           newGithubLinks[project.name] = project.githubLink;
         }
       });
       setGithubLinks(newGithubLinks);
 
-      setLoadingState(prev => ({
+      setLoadingState((prev) => ({
         ...prev,
-        counts: { ...prev.counts, projects: data.data.projects?.length || 0 }
+        counts: { ...prev.counts, projects: data.data.projects?.length || 0 },
       }));
 
       // Update checked projects from API response
@@ -207,11 +207,11 @@ const HackTimeComponent = ({
       // Create a new object to hold all commit data
       const newCommitData = {};
 
-      setLoadingState(prev => ({
+      setLoadingState((prev) => ({
         ...prev,
         projects: false,
         sessions: true,
-        message: "Loading sessions..."
+        message: "Loading sessions...",
       }));
 
       // Fetch sessions for all projects
@@ -242,23 +242,23 @@ const HackTimeComponent = ({
       // Process each project's sessions
       for (const result of projectSessionsResults) {
         newProjectSessions[result.projectName] = result.sessions;
-        setLoadingState(prev => ({
-            ...prev,
-          counts: { 
-            ...prev.counts, 
-            sessions: Object.keys(newProjectSessions).length 
-          }
-          }));
+        setLoadingState((prev) => ({
+          ...prev,
+          counts: {
+            ...prev.counts,
+            sessions: Object.keys(newProjectSessions).length,
+          },
+        }));
       }
 
       setProjectSessions(newProjectSessions);
 
-      setLoadingState(prev => ({
-            ...prev,
+      setLoadingState((prev) => ({
+        ...prev,
         sessions: false,
         commits: true,
-        message: "Loading Git commits..."
-          }));
+        message: "Loading Git commits...",
+      }));
 
       // Process projects with GitHub links
       for (const project of data.data.projects) {
@@ -274,13 +274,13 @@ const HackTimeComponent = ({
 
             const commits = await fetchGithubCommits(repoPath);
             newCommitData[project.name] = commits;
-            
-            setLoadingState(prev => ({
+
+            setLoadingState((prev) => ({
               ...prev,
-              counts: { 
-                ...prev.counts, 
-                commits: Object.keys(newCommitData).length 
-              }
+              counts: {
+                ...prev.counts,
+                commits: Object.keys(newCommitData).length,
+              },
             }));
 
             console.log(
@@ -315,17 +315,16 @@ const HackTimeComponent = ({
         projects: false,
         sessions: false,
         commits: false,
-        message: "All data loaded successfully!"
+        message: "All data loaded successfully!",
       });
 
       // Clear success message after 3 seconds
       setTimeout(() => {
-        setLoadingState(prev => ({
+        setLoadingState((prev) => ({
           ...prev,
-          message: ""
+          message: "",
         }));
       }, 3000);
-
     } catch (error) {
       console.error("Error in fetchHackatimeData:", error);
       setProjects([]); // Ensure projects is at least an empty array on error
@@ -333,7 +332,7 @@ const HackTimeComponent = ({
         projects: false,
         sessions: false,
         commits: false,
-        message: "Error loading data. Please try again."
+        message: "Error loading data. Please try again.",
       });
     }
   };
@@ -957,11 +956,13 @@ const HackTimeComponent = ({
     try {
       console.log(`Starting to fetch commits for ${repoPath}...`);
 
-      const response = await fetch(`/api/github/commits?repoPath=${encodeURIComponent(repoPath)}`);
+      const response = await fetch(
+        `/api/github/commits?repoPath=${encodeURIComponent(repoPath)}`,
+      );
 
-        if (!response.ok) {
-          const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to fetch commits');
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to fetch commits");
       }
 
       const data = await response.json();
@@ -1838,11 +1839,11 @@ const HackTimeComponent = ({
               bottom: "20px",
               right: "20px",
               padding: "8px 16px",
-              backgroundColor: loadingState.message.includes("Error") 
-                ? "rgba(255, 0, 0, 0.1)" 
+              backgroundColor: loadingState.message.includes("Error")
+                ? "rgba(255, 0, 0, 0.1)"
                 : "rgba(255, 255, 255, 0.9)",
-              color: loadingState.message.includes("Error") 
-                ? "#ff0000" 
+              color: loadingState.message.includes("Error")
+                ? "#ff0000"
                 : "#ef758a",
               textAlign: "center",
               fontSize: "14px",
@@ -1857,66 +1858,83 @@ const HackTimeComponent = ({
                 ? "1px solid rgba(255, 0, 0, 0.2)"
                 : "1px solid rgba(239, 117, 138, 0.2)",
               backdropFilter: "blur(4px)",
-              animation: loadingState.message === "All data loaded successfully!"
-                ? "loadingChipOut 0.5s ease-out forwards"
-                : "loadingChipIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards",
+              animation:
+                loadingState.message === "All data loaded successfully!"
+                  ? "loadingChipOut 0.5s ease-out forwards"
+                  : "loadingChipIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards",
             }}
           >
             {loadingState.projects && (
-              <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
-                <div style={{ 
-                  width: "8px", 
-                  height: "8px", 
-                  borderRadius: "50%", 
-                  backgroundColor: "#ef758a",
-                  animation: "loadingDot 1s ease-in-out infinite"
-                }} />
-                <div style={{ 
-                  width: "8px", 
-                  height: "8px", 
-                  borderRadius: "50%", 
-                  backgroundColor: "#ef758a",
-                  animation: "loadingDot 1s ease-in-out infinite 0.2s"
-                }} />
-                <div style={{ 
-                  width: "8px", 
-                  height: "8px", 
-                  borderRadius: "50%", 
-                  backgroundColor: "#ef758a",
-                  animation: "loadingDot 1s ease-in-out infinite 0.4s"
-                }} />
+              <div
+                style={{ display: "flex", gap: "4px", alignItems: "center" }}
+              >
+                <div
+                  style={{
+                    width: "8px",
+                    height: "8px",
+                    borderRadius: "50%",
+                    backgroundColor: "#ef758a",
+                    animation: "loadingDot 1s ease-in-out infinite",
+                  }}
+                />
+                <div
+                  style={{
+                    width: "8px",
+                    height: "8px",
+                    borderRadius: "50%",
+                    backgroundColor: "#ef758a",
+                    animation: "loadingDot 1s ease-in-out infinite 0.2s",
+                  }}
+                />
+                <div
+                  style={{
+                    width: "8px",
+                    height: "8px",
+                    borderRadius: "50%",
+                    backgroundColor: "#ef758a",
+                    animation: "loadingDot 1s ease-in-out infinite 0.4s",
+                  }}
+                />
               </div>
             )}
             {loadingState.sessions && (
-              <div style={{ 
-                width: "24px", 
-                height: "4px", 
-                backgroundColor: "rgba(239, 117, 138, 0.2)",
-                borderRadius: "2px",
-                overflow: "hidden"
-              }}>
-                <div style={{ 
-                  width: "100%", 
-                  height: "100%", 
-                  backgroundColor: "#ef758a",
-                  animation: "loadingBar 1.5s ease-in-out infinite"
-                }} />
+              <div
+                style={{
+                  width: "24px",
+                  height: "4px",
+                  backgroundColor: "rgba(239, 117, 138, 0.2)",
+                  borderRadius: "2px",
+                  overflow: "hidden",
+                }}
+              >
+                <div
+                  style={{
+                    width: "100%",
+                    height: "100%",
+                    backgroundColor: "#ef758a",
+                    animation: "loadingBar 1.5s ease-in-out infinite",
+                  }}
+                />
               </div>
             )}
             {loadingState.commits && (
-              <div style={{ 
-                width: "16px", 
-                height: "16px", 
-                border: "2px solid rgba(239, 117, 138, 0.2)",
-                borderTopColor: "#ef758a",
-                borderRadius: "50%",
-                animation: "loadingCircle 1s linear infinite"
-              }} />
+              <div
+                style={{
+                  width: "16px",
+                  height: "16px",
+                  border: "2px solid rgba(239, 117, 138, 0.2)",
+                  borderTopColor: "#ef758a",
+                  borderRadius: "50%",
+                  animation: "loadingCircle 1s linear infinite",
+                }}
+              />
             )}
-            <span style={{ 
-              minWidth: "120px",
-              textAlign: "left"
-            }}>
+            <span
+              style={{
+                minWidth: "120px",
+                textAlign: "left",
+              }}
+            >
               {loadingState.message}
             </span>
           </div>
@@ -2141,7 +2159,19 @@ const HackTimeComponent = ({
                 overflow: "hidden",
               }}
             >
-              <HackTimeSelectionShader />
+              <video
+                autoPlay
+                loop
+                muted
+                style={{
+                  width: "100%",
+                  height: "100%",
+                  objectFit: "cover",
+                }}
+              >
+                <source src="/effect.mp4" type="video/mp4" />
+                Your browser does not support the video tag.
+              </video>
             </div>
             {timeTrackingMethod === "" && !isMuted && (
               <audio
@@ -2228,30 +2258,31 @@ const HackTimeComponent = ({
                 </p>
 
                 {projects.map((project) => {
-                    const projectChecked = isProjectChecked(project.name);
-                    const hasCommits = commitData[project.name]?.length > 0;
-                    const hasSessions = getTotalDuration(projectSessions[project.name] || []) > 0;
-                    const grouped = groupSessionsByCommit(
-                      projectSessions[project.name] || [],
-                      project.name,
-                    );
-                    const projectTotal = getTotalDuration(
-                      projectSessions[project.name] || [],
-                    );
+                  const projectChecked = isProjectChecked(project.name);
+                  const hasCommits = commitData[project.name]?.length > 0;
+                  const hasSessions =
+                    getTotalDuration(projectSessions[project.name] || []) > 0;
+                  const grouped = groupSessionsByCommit(
+                    projectSessions[project.name] || [],
+                    project.name,
+                  );
+                  const projectTotal = getTotalDuration(
+                    projectSessions[project.name] || [],
+                  );
 
-                    return (
-                      <div key={project.name}>
-                        <div
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            marginBottom: "8px",
-                            width: "100%",
-                            position: "relative",
-                            opacity: hasSessions ? 1 : 0.5,
-                          }}
-                        >
-                          {hasSessions && (
+                  return (
+                    <div key={project.name}>
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          marginBottom: "8px",
+                          width: "100%",
+                          position: "relative",
+                          opacity: hasSessions ? 1 : 0.5,
+                        }}
+                      >
+                        {hasSessions && (
                           <div style={{ marginRight: "12px" }}>
                             <input
                               type="checkbox"
@@ -2367,7 +2398,7 @@ const HackTimeComponent = ({
                   })}
               </>
             ) : (
-              <DisconnectedHackatime 
+              <DisconnectedHackatime
                 setIsSettingEmail={setIsSettingEmail}
                 setEmail={setEmail}
                 setEmailCode={setEmailCode}

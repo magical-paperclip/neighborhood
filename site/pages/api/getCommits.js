@@ -48,41 +48,61 @@ export default async function handler(req, res) {
       })
       .all();
 
-    // Fetch session details for each commit
-    const commitsWithSessions = await Promise.all(
+    // Fetch session details and project names for each commit
+    const commitsWithDetails = await Promise.all(
       commits.map(async (commit) => {
         const sessionIds = commit.fields.sessions || [];
-        if (sessionIds.length === 0) {
-          return { ...commit, sessionDetails: [] };
+        const projectId = commit.fields.hackatimeProject;
+
+        // Fetch session details
+        let sessionDetails = [];
+        if (sessionIds.length > 0) {
+          const sessionFilterFormula = sessionIds
+            .map((id) => `RECORD_ID()='${id}'`)
+            .join(",");
+          const formula = `OR(${sessionFilterFormula})`;
+
+          sessionDetails = await base("sessions")
+            .select({
+              filterByFormula: formula,
+              fields: [
+                "sessionID",
+                "neighbor",
+                "startTime",
+                "endTime",
+                "duration",
+                "commit",
+                "hackatimeProject",
+                "approved",
+              ],
+            })
+            .all();
         }
 
-        // Create a filter formula that checks for any of the session IDs
-        const sessionFilterFormula = sessionIds
-          .map((id) => `RECORD_ID()='${id}'`)
-          .join(",");
-        const formula = `OR(${sessionFilterFormula})`;
+        // Fetch project name
+        let projectName = null;
+        if (projectId) {
+          const projectRecords = await base("hackatimeProjects")
+            .select({
+              filterByFormula: `RECORD_ID()='${projectId}'`,
+              fields: ["name"], // Assuming the project name is stored in the "name" field
+            })
+            .firstPage();
 
-        const sessions = await base("sessions")
-          .select({
-            filterByFormula: formula,
-            fields: [
-              "sessionID",
-              "neighbor",
-              "startTime",
-              "endTime",
-              "duration",
-              "commit",
-              "hackatimeProject",
-              "approved",
-            ],
-          })
-          .all();
+          if (projectRecords.length > 0) {
+            projectName = projectRecords[0].fields.name;
+          }
+        }
 
-        return { ...commit, sessionDetails: sessions };
+        return {
+          ...commit,
+          sessionDetails,
+          projectName, // Include the project name in the response
+        };
       }),
     );
 
-    return res.status(200).json(commitsWithSessions);
+    return res.status(200).json(commitsWithDetails);
   } catch (error) {
     console.error("Error fetching commits:", error);
     return res

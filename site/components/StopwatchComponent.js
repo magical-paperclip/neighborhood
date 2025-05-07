@@ -340,7 +340,7 @@ const StopwatchComponent = ({ onClose, onAddProject, isExiting, userData }) => {
         // Format the projects data
         const projectNames = projects.map((project) => ({
           id: project.id,
-          name: project.fields.name || "Unnamed Project",
+          name: project.fields.name || "-",
         }));
 
         console.log("Project Names:", projectNames);
@@ -577,9 +577,12 @@ const StopwatchComponent = ({ onClose, onAddProject, isExiting, userData }) => {
   };
 
   const formatTime = (ms) => {
+    const hours = Math.floor(ms / 3600000);
     const minutes = Math.floor((ms % 3600000) / 60000);
     const seconds = Math.floor((ms % 60000) / 1000);
-    return `${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`;
+    return `${hours.toString().padStart(2, "0")}:${minutes
+      .toString()
+      .padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`; // Format as HH:MM:SS
   };
 
   const formatDatetime = (dateString) => {
@@ -996,7 +999,7 @@ const StopwatchComponent = ({ onClose, onAddProject, isExiting, userData }) => {
                     background: "transparent",
                   }}
                 >
-                  {commit.fields.hackatimeProject || "-"}
+                  {commit.projectName || "-"}
                 </td>
                 <td
                   style={{

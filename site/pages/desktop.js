@@ -2,7 +2,7 @@ import Head from "next/head";
 import Image from "next/image";
 import { Geist, Geist_Mono } from "next/font/google";
 import styles from "@/styles/Home.module.css";
-import NeighborhoodEnvironment from "@/components/NeighborhoodEnvironment";
+import dynamic from "next/dynamic";
 import SignupComponent from "@/components/SignupComponent";
 import RewardsComponent from "@/components/RewardsComponent";
 import JournalComponent from "@/components/JournalComponent";
@@ -13,6 +13,11 @@ import ChallengesComponent from "@/components/ChallengesComponent";
 import { useState, useEffect, useRef } from "react";
 import { getToken, removeToken } from "@/utils/storage";
 import { updateSlackUserData } from "@/utils/slack";
+
+const NeighborhoodEnvironment = dynamic(
+  () => import("@/components/NeighborhoodEnvironment"),
+  { ssr: false },
+);
 
 export default function Home() {
   const [UIPage, setUIPage] = useState("");
@@ -35,6 +40,7 @@ export default function Home() {
 
   // Handle clicks outside profile dropdown
   useEffect(() => {
+    setHasEnteredNeighborhood(false);
     const handleClickOutside = (event) => {
       const dropdown = document.getElementById("profile-dropdown");
       const profileImage = document.getElementById("profile-image");
@@ -256,11 +262,19 @@ export default function Home() {
           <div
             style={{
               position: "absolute",
+<<<<<<< HEAD
               top: "0px",
               left: "0px",
               right: "0px",
               bottom: "0px",
               zIndex: 2,
+=======
+              top: "40px",
+              left: "40px",
+              right: "40px",
+              bottom: "40px",
+              zIndex: 10,
+>>>>>>> a9d83e653240d57bf3b4a3e0e35f2017991e1422
               pointerEvents: UIPage || showNeighborhoodPopup ? "auto" : "none",
             }}
           >
@@ -313,40 +327,50 @@ export default function Home() {
               />
             )}
           </div>
-
-          <div
-            style={{
-              position: "absolute",
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              height: "100vh",
-              width: "100vw",
-              overflow: "hidden", // Prevents scrollbars if video overflows
-            }}
-          >
-            <video
-              autoPlay
-              loop
-              muted
-              playsInline
+          {!hasEnteredNeighborhood && (
+            <div
               style={{
-                width: "100%",
-                height: "100%",
-                objectFit: "cover", // This ensures the video covers the container
                 position: "absolute",
-                zIndex: -100,
-                top: "50%",
-                left: "50%",
-                transform: "translate(-50%, -50%)", // Centers the video
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                height: "100vh",
+                width: "100vw",
+                zIndex: 0,
+                overflow: "hidden",
               }}
             >
-              <source src="video.mp4" type="video/mp4" />
-              Your browser does not support the video tag.
-            </video>
-          </div>
-          <div>
+              <video
+                autoPlay
+                loop
+                muted
+                playsInline
+                style={{
+                  width: "100%",
+                  height: "100%",
+                  objectFit: "cover",
+                  position: "absolute",
+                  zIndex: 0,
+                  top: "50%",
+                  left: "50%",
+                  transform: "translate(-50%, -50%)",
+                }}
+              >
+                <source src="video.mp4" type="video/mp4" />
+                Your browser does not support the video tag.
+              </video>
+            </div>
+          )}
+
+          {hasEnteredNeighborhood && (
+            <NeighborhoodEnvironment
+              hasEnteredNeighborhood={hasEnteredNeighborhood}
+              setHasEnteredNeighborhood={setHasEnteredNeighborhood}
+            />
+          )}
+
+          <div style={{ position: "relative", zIndex: 5 }}>
             <div
               style={{
                 height: "100vh",
