@@ -11,22 +11,42 @@ import { useState, useEffect, useMemo } from "react";
 import { socketManager } from "../../utils/socketManager";
 import { Html } from "@react-three/drei";
 
+function CameraController() {
+  const { camera } = useThree();
+  camera.rotation.order = 'YXZ';
+  return null;
+}
 
-export default function Scene({ hasEnteredNeighborhood, setHasEnteredNeighborhood, isLoading, setIsLoading }) {
-    const { scene, camera } = useThree();
+export default function Scene({ 
+  hasEnteredNeighborhood, 
+  setHasEnteredNeighborhood, 
+  isLoading, 
+  setIsLoading,
+  connectionStatus,
+  otherPlayers,
+  simonSaysState
+}) {
+    const { scene, camera, gl } = useThree();
     const containerRef = useRef(new THREE.Object3D());
     const fadeTimeRef = useRef(null);
     const assetsLoadedRef = useRef({ texture: false, map: false, player: false });
     const [pointerLocked, setPointerLocked] = useState(false);
-    const [otherPlayers, setOtherPlayers] = useState(new Map());
-    const [connectionStatus, setConnectionStatus] = useState(socketManager.connected);
-    const debug = true;
+    const debug = false; // Debug flag
     
+    // Debug logging helper
     const log = (...args) => {
       if (debug) {
         console.log('[Scene]', ...args);
       }
     };
+    
+    // Camera control refs
+    const rotationRef = useRef(0);  // Yaw rotation
+    const pitchRef = useRef(0);     // Pitch rotation
+    
+    // Camera control constants
+    const MOUSE_SENSITIVITY = 0.002;
+    const PITCH_LIMIT = Math.PI/3; // Limit vertical rotation to 60 degrees
     
     // Movement state - track key states but let PlayerModel handle the actual movement
     const [moveState, setMoveState] = useState({
@@ -74,18 +94,72 @@ export default function Scene({ hasEnteredNeighborhood, setHasEnteredNeighborhoo
     const gameplayLookAtOffset = useMemo(() => new THREE.Vector3(0, 2, 0), []);
     const startTimeRef = useRef(null);
     
-    // Track pointer lock state
+    // Basic mouse movement handling without pointer lock dependencies
     useEffect(() => {
-      const handleLockChange = () => {
-        setPointerLocked(document.pointerLockElement !== null);
+      const canvas = gl.domElement;
+      
+      // Direct mouse movement handler
+      const handleMouseMove = (e) => {
+        if (hasEnteredNeighborhood && document.pointerLockElement === canvas) {
+          const movementX = e.movementX || e.mozMovementX || e.webkitMovementX || 0;
+          const movementY = e.movementY || e.mozMovementY || e.webkitMovementY || 0;
+          
+          rotationRef.current -= movementX * MOUSE_SENSITIVITY;
+          pitchRef.current += movementY * MOUSE_SENSITIVITY;
+          pitchRef.current = Math.max(-PITCH_LIMIT, Math.min(PITCH_LIMIT, pitchRef.current));
+        }
       };
       
-      document.addEventListener('pointerlockchange', handleLockChange);
+      // Capture click to make control more responsive
+      const handleClick = (e) => {
+        // Check if we clicked on a UI element
+        const isUIElement = e.target.closest('[data-ui-element="true"]');
+        if (isUIElement) {
+          // If we're clicking UI, exit pointer lock
+          document.exitPointerLock();
+          return;
+        }
+
+        // Only lock pointer if we're in the neighborhood and not clicking UI
+        if (canvas && hasEnteredNeighborhood && document.pointerLockElement !== canvas) {
+          try {
+            canvas.requestPointerLock();
+          } catch (error) {
+            console.log('Failed to request pointer lock:', error);
+          }
+        }
+      };
+      
+      // Handle pointer lock change
+      const handlePointerLockChange = () => {
+        setPointerLocked(document.pointerLockElement === canvas);
+      };
+
+      // Handle pointer lock error
+      const handlePointerLockError = (error) => {
+        console.log('Pointer lock error:', error);
+      };
+      
+      // Set up event listeners
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('click', handleClick);
+      document.addEventListener('pointerlockchange', handlePointerLockChange);
+      document.addEventListener('pointerlockerror', handlePointerLockError);
+      
+      // Initial request
+      setTimeout(() => {
+        if (canvas && hasEnteredNeighborhood && !document.pointerLockElement) {
+          canvas.requestPointerLock();
+        }
+      }, 500);
       
       return () => {
-        document.removeEventListener('pointerlockchange', handleLockChange);
+        document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('click', handleClick);
+        document.removeEventListener('pointerlockchange', handlePointerLockChange);
+        document.removeEventListener('pointerlockerror', handlePointerLockError);
       };
-    }, []);
+    }, [gl, hasEnteredNeighborhood]);
     
     // Setup scene
     useEffect(() => {
@@ -298,79 +372,32 @@ export default function Scene({ hasEnteredNeighborhood, setHasEnteredNeighborhoo
       }
     }, [isLoading, hasEnteredNeighborhood]);
     
-    // Connect to Socket.IO when entering neighborhood
-    useEffect(() => {
-      if (hasEnteredNeighborhood) {
-        socketManager.onPlayersUpdate = (players) => {
-          setOtherPlayers(new Map(players));
-        };
-        socketManager.onConnectionStatusChange = (connected) => {
-          setConnectionStatus(connected);
-          if (!connected) {
-            // Clear other players when disconnected
-            setOtherPlayers(new Map());
-          }
-        };
-        socketManager.connect();
-
-        return () => {
-          socketManager.disconnect();
-          // Clear other players on cleanup
-          setOtherPlayers(new Map());
-        };
-      }
-    }, [hasEnteredNeighborhood]);
-    
-    // Debug multiplayer state
-    useEffect(() => {
-      if (debug) {
-        log('State changed:', {
-          hasEnteredNeighborhood,
-          isLoading,
-          otherPlayersCount: otherPlayers.size,
-          connectionStatus
-        });
-      }
-    }, [hasEnteredNeighborhood, isLoading, otherPlayers.size, connectionStatus]);
-    
     return (
       <>
-        {/* UI overlay for connection and debug */}
-        <Html fullscreen style={{ position: 'absolute', top: 10, left: 10, color: 'white', background: 'rgba(0,0,0,0.5)', padding: '6px', fontSize: '12px', pointerEvents: 'none' }}>
-          <div>Connection: {connectionStatus ? '✅ Connected' : '❌ Disconnected'}</div>
-          <div>Players: {otherPlayers.size}</div>
-        </Html>
-        {/* Scene lights - balanced intensity */}
         <ambientLight color={0xf4ccff} intensity={1.2} />
         <directionalLight position={[5, 5, 5]} intensity={1.1} />
         <pointLight position={[-5, 5, -5]} intensity={0.5} />
         
-        {/* Clouds */}
         <Clouds />
-        
-        {/* Ground */}
         <Ground onLoad={() => handleAssetLoaded('texture')} />
-        
-        {/* Map */}
         <MapModel onLoad={() => handleAssetLoaded('map')} />
         
-        {/* Player model */}
         <PlayerModel 
           moveState={memoizedMoveState}
           containerRef={containerRef}
           onLoad={() => handleAssetLoaded('player')}
           hasEnteredNeighborhood={hasEnteredNeighborhood}
+          rotationRef={rotationRef}
+          pitchRef={pitchRef}
         />
 
-        {/* Other players */}
         {hasEnteredNeighborhood && !isLoading && (
           <OtherPlayers 
             players={otherPlayers} 
-            key={otherPlayers.size} // Force remount when players change
+            key={otherPlayers.size}
           />
         )}
         
-        {/* Post-processing effects */}
         <Effects isLoading={isLoading} fadeTimeRef={fadeTimeRef} />
       </>
     );
