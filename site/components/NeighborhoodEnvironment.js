@@ -17,10 +17,6 @@ export default function NeighborhoodEnvironment({
 }) {
   const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    setHasEnteredNeighborhood(false);
-  }, []);
-
   return (
     <div
       style={{
@@ -29,7 +25,7 @@ export default function NeighborhoodEnvironment({
         left: 0,
         width: "100%",
         height: "100%",
-        zIndex: -1,
+        zIndex: 1,
       }}
     >
       <Canvas
@@ -48,7 +44,7 @@ export default function NeighborhoodEnvironment({
           physicallyCorrectLights: false,
         }}
         dpr={1} // Set to 1 for better performance
-        frameloop="demand"
+        frameloop="always"
         performance={{ min: 0.5 }}
         shadows={false}
       >

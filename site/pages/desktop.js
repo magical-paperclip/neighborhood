@@ -3,11 +3,6 @@ import Image from "next/image";
 import { Geist, Geist_Mono } from "next/font/google";
 import styles from "@/styles/Home.module.css";
 import dynamic from "next/dynamic";
-
-const NeighborhoodEnvironment = dynamic(
-  () => import("@/components/NeighborhoodEnvironment"),
-  { ssr: false },
-);
 import SignupComponent from "@/components/SignupComponent";
 import RewardsComponent from "@/components/RewardsComponent";
 import JournalComponent from "@/components/JournalComponent";
@@ -18,6 +13,11 @@ import ChallengesComponent from "@/components/ChallengesComponent";
 import { useState, useEffect, useRef } from "react";
 import { getToken, removeToken } from "@/utils/storage";
 import { updateSlackUserData } from "@/utils/slack";
+
+const NeighborhoodEnvironment = dynamic(
+  () => import("@/components/NeighborhoodEnvironment"),
+  { ssr: false },
+);
 
 export default function Home() {
   const [UIPage, setUIPage] = useState("");
@@ -40,6 +40,7 @@ export default function Home() {
 
   // Handle clicks outside profile dropdown
   useEffect(() => {
+    setHasEnteredNeighborhood(false);
     const handleClickOutside = (event) => {
       const dropdown = document.getElementById("profile-dropdown");
       const profileImage = document.getElementById("profile-image");
@@ -328,8 +329,8 @@ export default function Home() {
                 bottom: 0,
                 height: "100vh",
                 width: "100vw",
-                zIndex: -100,
-                overflow: "hidden", // Prevents scrollbars if video overflows
+                zIndex: 0,
+                overflow: "hidden",
               }}
             >
               <video
@@ -340,12 +341,12 @@ export default function Home() {
                 style={{
                   width: "100%",
                   height: "100%",
-                  objectFit: "cover", // This ensures the video covers the container
+                  objectFit: "cover",
                   position: "absolute",
-                  zIndex: -100,
+                  zIndex: 0,
                   top: "50%",
                   left: "50%",
-                  transform: "translate(-50%, -50%)", // Centers the video
+                  transform: "translate(-50%, -50%)",
                 }}
               >
                 <source src="video.mp4" type="video/mp4" />
@@ -354,7 +355,14 @@ export default function Home() {
             </div>
           )}
 
-          <div>
+          {hasEnteredNeighborhood && (
+            <NeighborhoodEnvironment
+              hasEnteredNeighborhood={hasEnteredNeighborhood}
+              setHasEnteredNeighborhood={setHasEnteredNeighborhood}
+            />
+          )}
+
+          <div style={{ position: "relative", zIndex: 2 }}>
             <div
               style={{
                 height: "100vh",
