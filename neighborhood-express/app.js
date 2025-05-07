@@ -53,6 +53,17 @@ const players = new Map();
 ioServer.on('connection', (socket) => {
   console.log('Player connected:', socket.id);
   
+  // Create a placeholder entry for the player
+  // This ensures they're in the players map even if they haven't moved yet
+  if (!players.has(socket.id)) {
+    console.log(`[APP] Creating placeholder entry for new player: ${socket.id}`);
+    players.set(socket.id, {
+      position: { x: 0, y: 0, z: 0 },
+      quaternion: { x: 0, y: 0, z: 0, w: 1 },
+      isMoving: false
+    });
+  }
+  
   // Send current Simon Says state to new players if a game is active
   if (simonSaysController.isGameActive()) {
     const currentCommand = simonSaysController.getCurrentCommand();
@@ -61,6 +72,13 @@ ioServer.on('connection', (socket) => {
       socket.emit('simonSaysStarted', currentCommand);
     }
   }
+  
+  // Handle heartbeat to keep connection alive
+  socket.on('heartbeat', () => {
+    console.log(`[APP] Heartbeat received from player: ${socket.id}`);
+    // Respond with current player count
+    socket.emit('heartbeatAck', { playerCount: players.size });
+  });
   
   // Send current player state immediately and log it
   console.log(`[APP] Sending playersUpdate to new player. Current players: ${players.size}`);
@@ -73,7 +91,9 @@ ioServer.on('connection', (socket) => {
   });
   
   socket.on('updateTransform', (data) => {
-    if (!players.has(socket.id)) {
+    const wasNewPlayer = !players.has(socket.id);
+    
+    if (wasNewPlayer) {
       console.log(`[APP] Adding new player to map: ${socket.id}`);
       players.set(socket.id, {
         position: data.position,
@@ -85,6 +105,16 @@ ioServer.on('connection', (socket) => {
       player.position = data.position;
       player.quaternion = data.quaternion;
       player.isMoving = data.isMoving;
+    }
+    
+    // Log the first transform update for debugging
+    if (wasNewPlayer) {
+      console.log(`[APP] First transform update from player ${socket.id}:`, 
+        JSON.stringify({
+          pos: data.position,
+          isMoving: data.isMoving
+        })
+      );
     }
     
     // Handle Simon Says if active
@@ -147,8 +177,20 @@ ioServer.on('connection', (socket) => {
 
   socket.on('disconnect', () => {
     console.log('Player disconnected:', socket.id);
-    players.delete(socket.id);
-    socket.broadcast.emit('playersUpdate', Array.from(players.entries()));
+    
+    // Check if the player was in the map before removing
+    const wasInMap = players.has(socket.id);
+    
+    if (wasInMap) {
+      console.log(`[APP] Removing player ${socket.id} from players map`);
+      players.delete(socket.id);
+      
+      // Broadcast to all remaining clients
+      console.log(`[APP] Broadcasting player removal. Remaining players: ${players.size}`);
+      ioServer.emit('playersUpdate', Array.from(players.entries()));
+    } else {
+      console.log(`[APP] Player ${socket.id} was not in players map, nothing to remove`);
+    }
   });
 });
 

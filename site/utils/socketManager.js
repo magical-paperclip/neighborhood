@@ -13,6 +13,7 @@ class SocketManager {
     this.onSimonSaysCommand = null;
     this.onSimonSaysUpdate = null;
     this.simonSaysActive = false;
+    this._sentFirstUpdate = false;
   }
 
   log(...args) {
@@ -78,7 +79,26 @@ class SocketManager {
       
       // Request initial players data - important fix for player sync
       this.socket.emit('requestPlayers');
+      
+      // Send initial transform to register ourselves on the server
+      if (typeof window !== 'undefined') {
+        this.log('Sending initial transform to register on server');
+        this.socket.emit('updateTransform', {
+          position: { x: 0, y: 0, z: 0 },
+          quaternion: { x: 0, y: 0, z: 0, w: 1 },
+          isMoving: false,
+          moveState: { w: false, a: false, s: false, d: false, space: false }
+        });
+      }
     });
+    
+    // Add explicit heartbeat to ensure connection stays alive
+    setInterval(() => {
+      if (this.socket && this.connected) {
+        this.log('Sending heartbeat ping');
+        this.socket.emit('heartbeat');
+      }
+    }, 10000);
 
     this.socket.on('playersUpdate', (players) => {
       this.log(`Received playersUpdate event with ${players.length} players`);
@@ -147,12 +167,30 @@ class SocketManager {
 
   updateTransform(position, quaternion, isMoving, moveState) {
     if (this.socket && this.connected) {
+      // Log the first update for debugging
+      if (!this._sentFirstUpdate) {
+        this.log('Sending first transform update:', {
+          position,
+          isMoving,
+          moveState
+        });
+        this._sentFirstUpdate = true;
+      }
+
       this.socket.emit('updateTransform', {
         position,
         quaternion,
         isMoving,
-        moveState
+        moveState: moveState || { w: false, a: false, s: false, d: false, space: false }
       });
+    } else {
+      this.log('Cannot update transform - socket not connected');
+      
+      // If socket exists but not connected, try reconnecting
+      if (this.socket && !this.connected) {
+        this.log('Attempting to reconnect...');
+        this.socket.connect();
+      }
     }
   }
 
