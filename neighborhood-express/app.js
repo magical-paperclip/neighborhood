@@ -22,9 +22,15 @@ const app = express();
 app.set('trust proxy', true);
 
 const httpServer = http.createServer(app);
+const PORT = process.env.PORT || 3002;
+
+// Configure CORS to accept connections from any origin or specific origins
+const CORS_ORIGINS = process.env.CORS_ORIGINS || "*";
+const corsOrigins = CORS_ORIGINS === "*" ? "*" : CORS_ORIGINS.split(",");
+
 const ioServer = new Server(httpServer, {
   cors: {
-    origin: "*",
+    origin: corsOrigins,
     methods: ["GET", "POST", "OPTIONS"],
     credentials: true,
     allowedHeaders: ["Content-Type", "Authorization"]
@@ -482,8 +488,8 @@ setInterval(() => {
   console.log(`[HEALTH] Players in map: ${players.size}`);
 }, 15000);
 
-httpServer.listen(3002, () => {
-  console.log('Server is running on port 3002');
+httpServer.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT}`);
   console.log('Socket.IO configured with events:');
   console.log('- simonSaysStarted');
   console.log('- simonSaysStopped');
@@ -492,4 +498,4 @@ httpServer.listen(3002, () => {
   console.log('- playersUpdate');
 });
 
-export { app };
+export { app, ioServer };

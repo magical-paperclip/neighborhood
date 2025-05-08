@@ -58,7 +58,7 @@ class SocketManager {
     this._connectionAttempts++;
     
     // Use the Hack Club selfhosted URL
-    const socketUrl = 'wss://vgso8kg840ss8cok4s4cwwgk.a.selfhosted.hackclub.com';
+    const socketUrl = 'http://localhost:3002';
     
     this.log(`Using socket URL: ${socketUrl} (attempt ${this._connectionAttempts})`);
     
