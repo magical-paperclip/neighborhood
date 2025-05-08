@@ -40,7 +40,7 @@ export default function Home() {
 
   // Handle clicks outside profile dropdown
   useEffect(() => {
-    setHasEnteredNeighborhood(false);
+    setHasEnteredNeighborhood(true);
     const handleClickOutside = (event) => {
       const dropdown = document.getElementById("profile-dropdown");
       const profileImage = document.getElementById("profile-image");

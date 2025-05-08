@@ -17,16 +17,39 @@ class SocketManager {
     this._connectionAttempts = 0;
     this._maxReconnectAttempts = 10;
     this._baseReconnectDelay = 1000;
+    
+    // Set up global error handler for debugging
+    if (typeof window !== 'undefined') {
+      window.addEventListener('error', (event) => {
+        this.log('Global error:', event.message);
+        console.error('[SocketManager] Global error:', event);
+      });
+    }
   }
 
   log(...args) {
     if (this.debug) {
       console.log('[SocketManager]', ...args);
+      
+      // Also log to server if connected
+      if (this.socket && this.connected) {
+        try {
+          this.socket.emit('clientLog', { 
+            timestamp: Date.now(),
+            message: args.map(arg => 
+              typeof arg === 'object' ? JSON.stringify(arg) : String(arg)
+            ).join(' ')
+          });
+        } catch (err) {
+          console.error('[SocketManager] Failed to send log to server:', err);
+        }
+      }
     }
   }
 
   connect() {
     if (this.socket) {
+      this.log('Disconnecting previous socket before reconnecting');
       this.socket.disconnect();
       this.socket = null;
     }
@@ -39,13 +62,41 @@ class SocketManager {
     
     this.log(`Using socket URL: ${socketUrl} (attempt ${this._connectionAttempts})`);
     
-    // Force polling transport only to avoid WebSocket issues
-    this.socket = io(socketUrl, {
-      transports: ['polling'],
-      reconnection: false, // We'll handle reconnection manually
-      timeout: 20000,
-      forceNew: true
-    });
+    try {
+      // Check if browser supports WebSockets at all
+      if (typeof WebSocket !== 'undefined') {
+        this.log('Browser supports WebSocket API');
+      } else {
+        this.log('WARNING: Browser does not support WebSocket API!');
+      }
+      
+      // Log browser info
+      if (typeof navigator !== 'undefined') {
+        this.log(`Browser: ${navigator.userAgent}`);
+      }
+      
+      // Force polling transport only to avoid WebSocket issues
+      this.socket = io(socketUrl, {
+        transports: ['polling'],
+        reconnection: false, // We'll handle reconnection manually
+        timeout: 20000,
+        forceNew: true,
+        // Add query parameters for debugging
+        query: {
+          clientId: `client_${Date.now()}`,
+          userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'unknown'
+        }
+      });
+      
+      this.log('Socket.io instance created:', !!this.socket);
+    } catch (err) {
+      this.log('Error creating Socket.io instance:', err);
+      console.error('[SocketManager] Socket creation error:', err);
+      
+      // Try to recover by scheduling another connection attempt
+      setTimeout(() => this.tryReconnect(), 5000);
+      return;
+    }
 
     // Set up a connection timeout
     const connectionTimeout = setTimeout(() => {
@@ -92,8 +143,24 @@ class SocketManager {
   }
 
   setupEventHandlers(connectionTimeout) {
+    if (!this.socket) {
+      this.log('Cannot set up event handlers - socket is null');
+      return;
+    }
+    
     // Clear listeners from previous connections
     this.socket.removeAllListeners();
+    
+    // Log all socket events for debugging
+    const originalOn = this.socket.on;
+    this.socket.on = (event, handler) => {
+      // Wrap handler to log events
+      const wrappedHandler = (...args) => {
+        this.log(`Event received: ${event} with ${args.length} args`);
+        return handler(...args);
+      };
+      return originalOn.call(this.socket, event, wrappedHandler);
+    };
     
     // Listen for connection errors and reconnection attempts
     this.socket.on('connect_error', (err) => {
@@ -110,21 +177,31 @@ class SocketManager {
       console.error('[SocketManager] Socket error:', error);
       this.onConnectionStatusChange?.(false);
     });
+    
+    // Listen for the debug message from server
+    this.socket.on('debug', (data) => {
+      this.log('Debug message from server:', data.message);
+    });
 
     this.socket.on('connect', () => {
       this.connected = true;
       this._connectionAttempts = 0; // Reset counter on successful connection
       clearTimeout(connectionTimeout);
       this.log('Connected to server with ID:', this.socket.id);
+      this.log('Socket transport:', this.socket.io.engine.transport.name);
       this.onConnectionStatusChange?.(true);
       
       // Request initial players data - important fix for player sync
+      this.log('Requesting initial player data');
       this.socket.emit('requestPlayers');
       
       // Send initial transform to register ourselves on the server
       if (typeof window !== 'undefined') {
         this.log('Sending initial transform to register on server');
-        this._forceRegisterOnServer();
+        setTimeout(() => {
+          this._forceRegisterOnServer();
+          this.log('Initial transform sent');
+        }, 500); // Small delay to ensure connection is fully established
       }
       
       // Set up heartbeat for this connection
@@ -172,6 +249,10 @@ class SocketManager {
     // Handle heartbeat acknowledgement
     this.socket.on('heartbeatAck', (data) => {
       this.log(`Heartbeat acknowledged. Server has ${data.playerCount} players`);
+      
+      if (data.playerIds) {
+        this.log(`Server player IDs: ${data.playerIds.join(', ')}`);
+      }
       
       // If server reports players but our map is empty, request an update
       if (data.playerCount > 0 && this.players.size === 0) {
@@ -234,12 +315,22 @@ class SocketManager {
   }
   
   _forceRegisterOnServer() {
-    this.socket.emit('updateTransform', {
-      position: { x: 0, y: 0, z: 0 },
-      quaternion: { x: 0, y: 0, z: 0, w: 1 },
-      isMoving: false,
-      moveState: { w: false, a: false, s: false, d: false, space: false }
-    });
+    if (!this.socket || !this.connected) {
+      this.log('Cannot send force register - not connected');
+      return;
+    }
+    
+    try {
+      this.log('Forcing player registration');
+      this.socket.emit('updateTransform', {
+        position: { x: 0, y: 0, z: 0 },
+        quaternion: { x: 0, y: 0, z: 0, w: 1 },
+        isMoving: false,
+        moveState: { w: false, a: false, s: false, d: false, space: false }
+      });
+    } catch (err) {
+      this.log('Error during force register:', err);
+    }
   }
 
   updateTransform(position, quaternion, isMoving, moveState) {
