@@ -40,18 +40,31 @@ const ioServer = new Server(httpServer, {
 // Debug players map state
 function logPlayersMap() {
   console.log(`[APP] Current players (${players.size}):`);
-  players.forEach((player, id) => {
-    console.log(`- Player ${id}: pos=${JSON.stringify(player.position)}`);
-  });
+  if (players.size > 0) {
+    players.forEach((player, id) => {
+      console.log(`- Player ${id}: pos=${JSON.stringify(player.position)}`);
+    });
+  } else {
+    console.log('No players currently in the map');
+  }
+  
+  // Log current Socket.IO connections
+  console.log(`[APP] Socket.IO connected clients: ${ioServer.engine.clientsCount}`);
+  const sockets = Array.from(ioServer.sockets.sockets.keys());
+  console.log(`[APP] Socket IDs: ${sockets.join(', ')}`);
 }
 
-// Set interval to log players state
-setInterval(logPlayersMap, 30000);
+// Set interval to log players state (more frequent for debugging)
+const logInterval = setInterval(logPlayersMap, 10000);
+
+// Track client versions and connection issues
+const clientVersions = new Map();
+const connectionIssues = new Map();
 
 const players = new Map();
 
 ioServer.on('connection', (socket) => {
-  console.log('Player connected:', socket.id);
+  console.log(`[APP] Player connected: ${socket.id} (Total: ${ioServer.engine.clientsCount})`);
   
   // Create a placeholder entry for the player
   // This ensures they're in the players map even if they haven't moved yet
@@ -60,9 +73,21 @@ ioServer.on('connection', (socket) => {
     players.set(socket.id, {
       position: { x: 0, y: 0, z: 0 },
       quaternion: { x: 0, y: 0, z: 0, w: 1 },
-      isMoving: false
+      isMoving: false,
+      lastUpdate: Date.now()
     });
+    
+    // Log players map immediately after adding a player
+    logPlayersMap();
   }
+  
+  // Track connection issues
+  connectionIssues.set(socket.id, {
+    connectTime: Date.now(),
+    lastActivity: Date.now(),
+    updateCount: 0,
+    heartbeatCount: 0
+  });
   
   // Send current Simon Says state to new players if a game is active
   if (simonSaysController.isGameActive()) {
@@ -75,46 +100,86 @@ ioServer.on('connection', (socket) => {
   
   // Handle heartbeat to keep connection alive
   socket.on('heartbeat', () => {
-    console.log(`[APP] Heartbeat received from player: ${socket.id}`);
+    const issues = connectionIssues.get(socket.id) || { 
+      heartbeatCount: 0, 
+      lastActivity: 0 
+    };
+    
+    issues.lastActivity = Date.now();
+    issues.heartbeatCount++;
+    connectionIssues.set(socket.id, issues);
+    
+    // If this is the first heartbeat or every 10th heartbeat, log it
+    if (issues.heartbeatCount === 1 || issues.heartbeatCount % 10 === 0) {
+      console.log(`[APP] Heartbeat #${issues.heartbeatCount} received from player: ${socket.id}`);
+    }
+    
     // Respond with current player count
-    socket.emit('heartbeatAck', { playerCount: players.size });
+    socket.emit('heartbeatAck', { 
+      playerCount: players.size,
+      playerIds: Array.from(players.keys())
+    });
   });
   
   // Send current player state immediately and log it
-  console.log(`[APP] Sending playersUpdate to new player. Current players: ${players.size}`);
+  console.log(`[APP] Sending playersUpdate to new player ${socket.id}. Current players: ${players.size}`);
   socket.emit('playersUpdate', Array.from(players.entries()));
   
   // Handle explicit player data requests
   socket.on('requestPlayers', () => {
     console.log(`[APP] Player ${socket.id} explicitly requested players data. Current players: ${players.size}`);
+    
+    // Update last activity time
+    const issues = connectionIssues.get(socket.id);
+    if (issues) {
+      issues.lastActivity = Date.now();
+      connectionIssues.set(socket.id, issues);
+    }
+    
     socket.emit('playersUpdate', Array.from(players.entries()));
   });
   
   socket.on('updateTransform', (data) => {
     const wasNewPlayer = !players.has(socket.id);
     
+    // Update connection issues tracking
+    const issues = connectionIssues.get(socket.id) || { 
+      updateCount: 0, 
+      lastActivity: 0 
+    };
+    issues.lastActivity = Date.now();
+    issues.updateCount++;
+    connectionIssues.set(socket.id, issues);
+    
     if (wasNewPlayer) {
       console.log(`[APP] Adding new player to map: ${socket.id}`);
       players.set(socket.id, {
         position: data.position,
         quaternion: data.quaternion,
-        isMoving: data.isMoving
+        isMoving: data.isMoving,
+        lastUpdate: Date.now()
       });
     } else {
       const player = players.get(socket.id);
       player.position = data.position;
       player.quaternion = data.quaternion;
       player.isMoving = data.isMoving;
+      player.lastUpdate = Date.now();
     }
     
-    // Log the first transform update for debugging
-    if (wasNewPlayer) {
-      console.log(`[APP] First transform update from player ${socket.id}:`, 
+    // Log the first transform update or every 100th update for a player
+    if (issues.updateCount === 1 || issues.updateCount % 100 === 0) {
+      console.log(`[APP] Transform update #${issues.updateCount} from player ${socket.id}:`, 
         JSON.stringify({
           pos: data.position,
           isMoving: data.isMoving
         })
       );
+    }
+    
+    // Log players map when player count changes
+    if (wasNewPlayer) {
+      logPlayersMap();
     }
     
     // Handle Simon Says if active
@@ -150,13 +215,11 @@ ioServer.on('connection', (socket) => {
     }
     
     // Broadcast to all clients except sender
-    console.log(`[APP] Broadcasting playersUpdate. Current players: ${players.size}`);
     socket.broadcast.emit('playersUpdate', Array.from(players.entries()));
     
     // Every 5th update (or so), also send a full sync to all clients including sender
     // This helps ensure that clients that missed updates get in sync
     if (Math.random() < 0.2) { // ~20% chance to do a full sync
-      console.log(`[APP] Sending full sync to all clients. Current players: ${players.size}`);
       ioServer.emit('playersUpdate', Array.from(players.entries()));
     }
   });
@@ -252,6 +315,35 @@ app.use(function (err, req, res, next) {
     message: err.message,
     error: req.app.get("env") === "development" ? err : {},
   });
+});
+
+// Periodically check for inactive players and clean them up
+const cleanupInterval = setInterval(() => {
+  const now = Date.now();
+  let cleanedUp = 0;
+  
+  players.forEach((player, id) => {
+    // If a player hasn't updated in 30 seconds, remove them
+    if (now - player.lastUpdate > 30000) {
+      console.log(`[APP] Removing inactive player ${id} (last update: ${now - player.lastUpdate}ms ago)`);
+      players.delete(id);
+      cleanedUp++;
+    }
+  });
+  
+  if (cleanedUp > 0) {
+    console.log(`[APP] Cleaned up ${cleanedUp} inactive players. Remaining: ${players.size}`);
+    // Broadcast updated player list to all clients
+    ioServer.emit('playersUpdate', Array.from(players.entries()));
+  }
+}, 15000);
+
+// Add cleanup for when the server shuts down
+process.on('SIGINT', () => {
+  console.log('Shutting down server...');
+  clearInterval(logInterval);
+  clearInterval(cleanupInterval);
+  process.exit(0);
 });
 
 httpServer.listen(3002, () => {

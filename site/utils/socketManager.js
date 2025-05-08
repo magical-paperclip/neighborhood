@@ -14,6 +14,9 @@ class SocketManager {
     this.onSimonSaysUpdate = null;
     this.simonSaysActive = false;
     this._sentFirstUpdate = false;
+    this._connectionAttempts = 0;
+    this._maxReconnectAttempts = 10;
+    this._baseReconnectDelay = 1000;
   }
 
   log(...args) {
@@ -23,57 +26,95 @@ class SocketManager {
   }
 
   connect() {
-    if (this.socket) return;
+    if (this.socket) {
+      this.socket.disconnect();
+      this.socket = null;
+    }
 
     this.log('Connecting to server...');
+    this._connectionAttempts++;
     
     // Use the Hack Club selfhosted URL
     const socketUrl = 'https://vgso8kg840ss8cok4s4cwwgk.a.selfhosted.hackclub.com';
     
-    this.log(`Using socket URL: ${socketUrl}`);
+    this.log(`Using socket URL: ${socketUrl} (attempt ${this._connectionAttempts})`);
     
     // Force polling transport only to avoid WebSocket issues
     this.socket = io(socketUrl, {
       transports: ['polling'],
-      reconnection: true,
-      reconnectionAttempts: 5,
-      reconnectionDelay: 1000,
+      reconnection: false, // We'll handle reconnection manually
       timeout: 20000,
       forceNew: true
     });
 
-    this.setupEventHandlers();
+    // Set up a connection timeout
+    const connectionTimeout = setTimeout(() => {
+      if (!this.connected && this.socket) {
+        this.log('Connection attempt timed out');
+        this.socket.disconnect();
+        this.tryReconnect();
+      }
+    }, 10000);
+
+    this.setupEventHandlers(connectionTimeout);
+    
+    // Send a connection status update every 5 seconds while not connected
+    if (!this._connectionStatusInterval) {
+      this._connectionStatusInterval = setInterval(() => {
+        if (!this.connected) {
+          this.log('Still trying to connect...');
+          this.onConnectionStatusChange?.(false);
+        } else {
+          clearInterval(this._connectionStatusInterval);
+          this._connectionStatusInterval = null;
+        }
+      }, 5000);
+    }
   }
 
-  setupEventHandlers() {
+  tryReconnect() {
+    if (this._connectionAttempts >= this._maxReconnectAttempts) {
+      this.log('Max reconnection attempts reached, giving up');
+      this.onConnectionStatusChange?.(false);
+      return;
+    }
+
+    // Use exponential backoff with jitter
+    const delay = Math.min(30000, this._baseReconnectDelay * Math.pow(1.5, this._connectionAttempts)) * 
+                  (0.5 + Math.random());
+    
+    this.log(`Scheduling reconnection attempt in ${Math.round(delay)}ms`);
+    
+    setTimeout(() => {
+      this.log('Attempting to reconnect...');
+      this.connect();
+    }, delay);
+  }
+
+  setupEventHandlers(connectionTimeout) {
+    // Clear listeners from previous connections
+    this.socket.removeAllListeners();
+    
     // Listen for connection errors and reconnection attempts
     this.socket.on('connect_error', (err) => {
       this.log('Connection error:', err.message);
       console.error('[SocketManager] Connection error details:', err);
+      clearTimeout(connectionTimeout);
       this.onConnectionStatusChange?.(false);
-    });
-
-    this.socket.on('reconnect_attempt', (attemptNumber) => {
-      this.log(`Reconnection attempt ${attemptNumber}...`);
-    });
-
-    this.socket.on('reconnect_failed', () => {
-      this.log('Failed to reconnect after all attempts');
-      this.onConnectionStatusChange?.(false);
+      this.socket.disconnect();
+      this.tryReconnect();
     });
 
     this.socket.on('error', (error) => {
       this.log('Socket error:', error);
       console.error('[SocketManager] Socket error:', error);
-    });
-
-    this.socket.io.on('error', (error) => {
-      this.log('Transport error:', error);
-      console.error('[SocketManager] Transport error:', error);
+      this.onConnectionStatusChange?.(false);
     });
 
     this.socket.on('connect', () => {
       this.connected = true;
+      this._connectionAttempts = 0; // Reset counter on successful connection
+      clearTimeout(connectionTimeout);
       this.log('Connected to server with ID:', this.socket.id);
       this.onConnectionStatusChange?.(true);
       
@@ -83,22 +124,26 @@ class SocketManager {
       // Send initial transform to register ourselves on the server
       if (typeof window !== 'undefined') {
         this.log('Sending initial transform to register on server');
-        this.socket.emit('updateTransform', {
-          position: { x: 0, y: 0, z: 0 },
-          quaternion: { x: 0, y: 0, z: 0, w: 1 },
-          isMoving: false,
-          moveState: { w: false, a: false, s: false, d: false, space: false }
-        });
+        this._forceRegisterOnServer();
       }
+      
+      // Set up heartbeat for this connection
+      this._setupHeartbeat();
     });
     
-    // Add explicit heartbeat to ensure connection stays alive
-    setInterval(() => {
-      if (this.socket && this.connected) {
-        this.log('Sending heartbeat ping');
-        this.socket.emit('heartbeat');
+    this.socket.on('disconnect', (reason) => {
+      this.log('Disconnected from server. Reason:', reason);
+      this.connected = false;
+      this.onConnectionStatusChange?.(false);
+      this.players.clear();
+      this.onPlayersUpdate?.(this.players);
+      this.simonSaysActive = false;
+      
+      // Try to reconnect unless it was a manual disconnect
+      if (reason !== 'io client disconnect') {
+        this.tryReconnect();
       }
-    }, 10000);
+    });
 
     this.socket.on('playersUpdate', (players) => {
       this.log(`Received playersUpdate event with ${players.length} players`);
@@ -123,14 +168,16 @@ class SocketManager {
         console.error('[SocketManager] Error processing players:', err);
       }
     });
-
-    this.socket.on('disconnect', (reason) => {
-      this.connected = false;
-      this.log('Disconnected from server. Reason:', reason);
-      this.onConnectionStatusChange?.(false);
-      this.players.clear();
-      this.onPlayersUpdate?.(this.players);
-      this.simonSaysActive = false;
+    
+    // Handle heartbeat acknowledgement
+    this.socket.on('heartbeatAck', (data) => {
+      this.log(`Heartbeat acknowledged. Server has ${data.playerCount} players`);
+      
+      // If server reports players but our map is empty, request an update
+      if (data.playerCount > 0 && this.players.size === 0) {
+        this.log('Server reports players but our map is empty, requesting update');
+        this.socket.emit('requestPlayers');
+      }
     });
     
     // Simon Says event handlers
@@ -164,6 +211,36 @@ class SocketManager {
       }
     });
   }
+  
+  _setupHeartbeat() {
+    // Clear any existing heartbeat
+    if (this._heartbeatInterval) {
+      clearInterval(this._heartbeatInterval);
+    }
+    
+    // Set up a new heartbeat
+    this._heartbeatInterval = setInterval(() => {
+      if (this.socket && this.connected) {
+        this.log('Sending heartbeat ping');
+        this.socket.emit('heartbeat');
+        
+        // Also send a position update to ensure we stay registered
+        this._forceRegisterOnServer();
+      } else {
+        clearInterval(this._heartbeatInterval);
+        this._heartbeatInterval = null;
+      }
+    }, 5000);
+  }
+  
+  _forceRegisterOnServer() {
+    this.socket.emit('updateTransform', {
+      position: { x: 0, y: 0, z: 0 },
+      quaternion: { x: 0, y: 0, z: 0, w: 1 },
+      isMoving: false,
+      moveState: { w: false, a: false, s: false, d: false, space: false }
+    });
+  }
 
   updateTransform(position, quaternion, isMoving, moveState) {
     if (this.socket && this.connected) {
@@ -188,8 +265,8 @@ class SocketManager {
       
       // If socket exists but not connected, try reconnecting
       if (this.socket && !this.connected) {
-        this.log('Attempting to reconnect...');
-        this.socket.connect();
+        this.log('Not connected during updateTransform, attempting to reconnect...');
+        this.connect();
       }
     }
   }
@@ -211,10 +288,23 @@ class SocketManager {
   disconnect() {
     if (this.socket) {
       this.log('Disconnecting from server');
+      
+      // Clear intervals
+      if (this._heartbeatInterval) {
+        clearInterval(this._heartbeatInterval);
+        this._heartbeatInterval = null;
+      }
+      
+      if (this._connectionStatusInterval) {
+        clearInterval(this._connectionStatusInterval);
+        this._connectionStatusInterval = null;
+      }
+      
       this.socket.disconnect();
       this.socket = null;
       this.players.clear();
       this.simonSaysActive = false;
+      this.connected = false;
     }
   }
 }
