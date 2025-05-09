@@ -68,6 +68,7 @@ const HackTimeComponent = ({
       commits: 0,
     },
   });
+  const [hoveredGithubLink, setHoveredGithubLink] = useState(null);
 
   // Add debounce helper at the top level of the component
   const debounce = (func, wait) => {
@@ -1710,6 +1711,56 @@ const HackTimeComponent = ({
     }
   `;
 
+  const handleGithubDisconnect = async (projectName) => {
+    try {
+      const token = getToken();
+      if (!token) {
+        throw new Error("No token found");
+      }
+
+      const response = await fetch("/api/disconnectGithub", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          token,
+          projectName,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to disconnect GitHub repository");
+      }
+
+      // Update local state
+      setGithubLinks((prev) => {
+        const newState = { ...prev };
+        delete newState[projectName];
+        return newState;
+      });
+
+      // Clear commit data for this project
+      setCommitData((prev) => {
+        const newState = { ...prev };
+        delete newState[projectName];
+        return newState;
+      });
+
+      // Clear session commit matches
+      setSessionCommitMatches((prev) => {
+        const newState = { ...prev };
+        delete newState[projectName];
+        return newState;
+      });
+
+      showAlert("GitHub repository disconnected successfully");
+    } catch (error) {
+      console.error("Error disconnecting GitHub:", error);
+      showAlert("Failed to disconnect GitHub repository");
+    }
+  };
+
   return (
     <div
       className={`pop-in ${isExiting ? "hidden" : ""}`}
@@ -2239,110 +2290,112 @@ const HackTimeComponent = ({
                               onChange={() => handleProjectSelect(project.name)}
                             />
                           </div>
-                        )}
-                        <div style={{ flex: 1 }}>
-                          <p
-                            style={{
-                              margin: 0,
-                              display: "flex",
-                              alignItems: "center",
-                              gap: "8px",
-                            }}
-                          >
-                            <span>{project.name}</span>
-                            {projectTotal > 0 ? (
-                              <span style={{ color: "#666" }}>
-                                ({formatDuration(projectTotal)})
-                              </span>
-                            ) : null}
-                            {githubLinks[project.name] ? (
-                              <span
-                                style={{
-                                  fontSize: "12px",
-                                  color: "#666",
-                                  opacity: 0.8,
-                                }}
-                              >
-                                (
-                                {githubLinks[project.name].replace(
-                                  /https?:\/\/github\.com\//,
-                                  "",
-                                )}
-                                )
-                              </span>
-                            ) : projectChecked ? (
-                              <span
-                                onClick={() => handleGithubLink(project.name)}
-                                style={{
-                                  color: "#ef758a",
-                                  background: "#ffeef0",
-                                  padding: "2px 8px",
-                                  borderRadius: "4px",
-                                  cursor: "pointer",
-                                  fontSize: "12px",
-                                  fontWeight: "500",
-                                  display: "flex",
-                                  alignItems: "center",
-                                  gap: "4px",
-                                  border: "1px solid #ffd1d6",
-                                }}
-                              >
-                                <span style={{ fontSize: "14px" }}>⚠️</span>
-                                Connect GitHub Required
-                              </span>
-                            ) : null}
-                          </p>
-                          {projectChecked && !githubLinks[project.name] && (
+                          )}
+                          <div style={{ flex: 1 }}>
                             <p
                               style={{
-                                margin: "4px 0 0 0",
-                                fontSize: "12px",
-                                color: "#666",
-                                fontStyle: "italic",
+                                margin: 0,
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "8px",
                               }}
                             >
-                              Connect GitHub to track time against commits
+                              <span>{project.name}</span>
+                              {projectTotal > 0 ? (
+                                <span style={{ color: "#666" }}>
+                                  ({formatDuration(projectTotal)})
+                                </span>
+                              ) : null}
+                              {githubLinks[project.name] ? (
+                                <span
+                                  onClick={() => handleGithubDisconnect(project.name)}
+                                  onMouseEnter={() => setHoveredGithubLink(project.name)}
+                                  onMouseLeave={() => setHoveredGithubLink(null)}
+                                  style={{
+                                    fontSize: "12px",
+                                    color: hoveredGithubLink === project.name ? "#ef758a" : "#666",
+                                    opacity: 0.8,
+                                    cursor: "pointer",
+                                    textDecoration: hoveredGithubLink === project.name ? "line-through" : "underline",
+                                    transition: "all 0.2s ease"
+                                  }}
+                                >
+                                  ({githubLinks[project.name].replace(/https?:\/\/github\.com\//, "")})
+                                </span>
+                              ) : projectChecked ? (
+                                <span
+                                  onClick={() => handleGithubLink(project.name)}
+                                  style={{
+                                    color: "#ef758a",
+                                    background: "#ffeef0",
+                                    padding: "2px 8px",
+                                    borderRadius: "4px",
+                                    cursor: "pointer",
+                                    fontSize: "12px",
+                                    fontWeight: "500",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: "4px",
+                                    border: "1px solid #ffd1d6",
+                                  }}
+                                >
+                                  <span style={{ fontSize: "14px" }}>⚠️</span>
+                                  Connect GitHub Required
+                                </span>
+                              ) : null}
                             </p>
-                          )}
-                        </div>
-                        {hasCommits && hasSessions && (
-                          <div>
-                            <button
-                              onClick={() => toggleProject(project.name)}
-                              style={{
-                                padding: "4px 8px",
-                                border: "1px solid #ccc",
-                                borderRadius: "4px",
-                                backgroundColor: "white",
-                                cursor: "pointer",
-                                transform: openedProjects.includes(project.name)
-                                  ? "rotate(180deg)"
-                                  : "none",
-                              }}
-                            >
-                              ▼
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                      {openedProjects.includes(project.name) &&
-                        hasCommits &&
-                        hasSessions && (
-                          <div
-                            style={{
-                              paddingLeft: "24px",
-                              marginBottom: "8px",
-                            }}
-                          >
-                            {Object.entries(grouped).map(
-                              ([commitSha, commitGroup]) =>
-                                renderCommitGroup(project.name, commitGroup),
+                            {projectChecked && !githubLinks[project.name] && (
+                              <p
+                                style={{
+                                  margin: "4px 0 0 0",
+                                  fontSize: "12px",
+                                  color: "#666",
+                                  fontStyle: "italic",
+                                }}
+                              >
+                                Connect GitHub to track time against commits
+                              </p>
                             )}
                           </div>
-                        )}
-                    </div>
-                  );
-                })}
+                          {hasCommits && hasSessions && (
+                            <div>
+                              <button
+                                onClick={() => toggleProject(project.name)}
+                                style={{
+                                  padding: "4px 8px",
+                                  border: "1px solid #ccc",
+                                  borderRadius: "4px",
+                                  backgroundColor: "white",
+                                  cursor: "pointer",
+                                  transform: openedProjects.includes(
+                                    project.name,
+                                  )
+                                    ? "rotate(180deg)"
+                                    : "none",
+                                }}
+                              >
+                                ▼
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                        {openedProjects.includes(project.name) &&
+                          hasCommits && hasSessions && (
+                            <div
+                              style={{
+                                paddingLeft: "24px",
+                                marginBottom: "8px",
+                              }}
+                            >
+                              {Object.entries(grouped).map(
+                                ([commitSha, commitGroup]) =>
+                                  renderCommitGroup(project.name, commitGroup),
+                              )}
+                            </div>
+                          )}
+                      </div>
+                    );
+                  })}
               </>
             ) : (
               <DisconnectedHackatime

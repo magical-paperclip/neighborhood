@@ -50,6 +50,7 @@ export default async function handler(req, res) {
     const userId = userRecords[0].id;
     const userName = userRecords[0].fields.name || '';
     const userProfilePicture = userRecords[0].fields.profilePicture || '';
+    const githubUsername = userRecords[0].fields.githubUsername || '';
 
     // Get the user's Slack profile using the bot token
     const web = new WebClient(process.env.SLACK_BOT_TOKEN);
@@ -232,7 +233,8 @@ export default async function handler(req, res) {
         profilePicture: image_72,
         slackId: slack_id,
         slackHandle: display_name,
-        email: userEmail
+        email: userEmail,
+        githubUsername: githubUsername
       });
 
     } catch (error) {
