@@ -21,7 +21,7 @@ const NeighborhoodEnvironment = dynamic(
 
 export default function Home() {
   const [UIPage, setUIPage] = useState("");
-  const [hasEnteredNeighborhood, setHasEnteredNeighborhood] = useState(false);
+  const [hasEnteredNeighborhood, setHasEnteredNeighborhood] = useState(true);
   const [selectedItem, setSelectedItem] = useState("start");
   const [isSignedIn, setIsSignedIn] = useState(true);
   const [isExiting, setIsExiting] = useState(false);
@@ -40,7 +40,6 @@ export default function Home() {
 
   // Handle clicks outside profile dropdown
   useEffect(() => {
-    setHasEnteredNeighborhood(false);
     const handleClickOutside = (event) => {
       const dropdown = document.getElementById("profile-dropdown");
       const profileImage = document.getElementById("profile-image");

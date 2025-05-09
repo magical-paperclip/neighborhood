@@ -75,9 +75,8 @@ ioServer.use((socket, next) => {
 const players = new Map();
 
 ioServer.on('connection', (socket) => {
-  // Create a placeholder entry for the player immediately
-  const playerName = socket.handshake.query.name || "Player";
-  const profilePicture = socket.handshake.query.profilePicture || "";
+  const playerName = socket.handshake.query.name || 'Player'
+  const profilePicture = socket.handshake.query.profilePicture || ''
   
   // Track connection issues
   connectionIssues.set(socket.id, {
@@ -98,13 +97,10 @@ ioServer.on('connection', (socket) => {
       profilePicture: profilePicture
     });
     
-    // Send full player data to the new player first
     socket.emit('playersUpdate', Array.from(players.entries()));
-    
-    // Then broadcast the new player to others with complete information
     socket.broadcast.emit('playersUpdate', Array.from(players.entries()));
     
-    // Send another update after a short delay to ensure everyone gets the latest info
+    // Then broadcast the new player to others with complete information
     setTimeout(() => {
       ioServer.emit('playersUpdate', Array.from(players.entries()));
     }, 2000);
@@ -136,96 +132,16 @@ ioServer.on('connection', (socket) => {
       socket.emit('simonSaysStarted', currentCommand);
     }
   }
-  
-  // Handle heartbeat to keep connection alive
-  socket.on('heartbeat', () => {
-    const issues = connectionIssues.get(socket.id) || { 
-      heartbeatCount: 0, 
-      lastActivity: 0 
-    };
-    
-    issues.lastActivity = Date.now();
-    issues.heartbeatCount++;
-    connectionIssues.set(socket.id, issues);
-    
-    // Respond with current player count
-    socket.emit('heartbeatAck', { 
-      playerCount: players.size,
-      playerIds: Array.from(players.keys())
-    });
-    
-    // Also send a full players update with each heartbeat to ensure data consistency
-    socket.emit('playersUpdate', Array.from(players.entries()));
-  });
-  
-  // Handle immediate player data requests with high priority
-  socket.on('requestPlayers', () => {
-    socket.emit('playersUpdate', Array.from(players.entries()));
-    
-    // Schedule another update shortly after to ensure data is received
-    setTimeout(() => {
-      if (socket.connected) {
-        socket.emit('playersUpdate', Array.from(players.entries()));
-      }
-    }, 1000);
-  });
-  
-  socket.on('updateTransform', (data) => {
-    const wasNewPlayer = !players.has(socket.id);
-    
-    // Update connection issues tracking
-    const issues = connectionIssues.get(socket.id) || { 
-      updateCount: 0, 
-      lastActivity: 0 
-    };
-    issues.lastActivity = Date.now();
-    issues.updateCount++;
-    connectionIssues.set(socket.id, issues);
-    
-    if (wasNewPlayer) {
-      players.set(socket.id, {
-        position: data.position,
-        quaternion: data.quaternion,
-        isMoving: data.isMoving,
-        lastUpdate: Date.now(),
-        name: data.name || socket.handshake.query.name || "Player",
-        profilePicture: data.profilePicture || socket.handshake.query.profilePicture || ""
-      });
-      
-      // When a new player joins, broadcast complete player data to everyone
-      ioServer.emit('playersUpdate', Array.from(players.entries()));
-    } else {
-      const player = players.get(socket.id);
-      player.position = data.position;
-      player.quaternion = data.quaternion;
-      player.isMoving = data.isMoving;
-      player.lastUpdate = Date.now();
-      
-      // Important: Always update player info if provided
-      if (data.name) player.name = data.name;
-      if (data.profilePicture) player.profilePicture = data.profilePicture;
-      
-      // Broadcast to all clients except sender
-      socket.broadcast.emit('playersUpdate', Array.from(players.entries()));
-      
-      // Every 5th update, also send a full sync to all clients including sender
-      if (Math.random() < 0.2) { // Increased from 10% to 20% for better sync
-        ioServer.emit('playersUpdate', Array.from(players.entries()));
-      }
-    }
-  });
 
-  socket.on('startSimonSays', () => {
-    const firstCommand = simonSaysController.startGame();
-    if (firstCommand) {
-      ioServer.emit('simonSaysStarted', firstCommand);
+  socket.on('playerMove', (data) => {
+    if (players.has(socket.id)) {
+      const player = players.get(socket.id)
+      player.position = data.position
+      player.quaternion = data.quaternion
+      player.isMoving = data.isMoving
+      player.lastUpdate = Date.now()
     }
-  });
-
-  socket.on('stopSimonSays', () => {
-    simonSaysController.stopGame();
-    ioServer.emit('simonSaysStopped');
-  });
+  })
 
   // Add endpoint to update player information
   socket.on('updatePlayerInfo', (data) => {

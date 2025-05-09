@@ -17,6 +17,117 @@ function CameraController() {
   return null;
 }
 
+// Particle system component
+function MagicParticles({ position, isMoving }) {
+  const particlesRef = useRef();
+  const particles = useMemo(() => {
+    const temp = [];
+    for (let i = 0; i < 50; i++) {
+      const particle = {
+        position: new THREE.Vector3(),
+        velocity: new THREE.Vector3(
+          (Math.random() - 0.5) * 0.02,
+          Math.random() * 0.02,
+          (Math.random() - 0.5) * 0.02
+        ),
+        size: Math.random() * 0.1 + 0.05,
+        color: new THREE.Color(
+          Math.random() * 0.5 + 0.5,
+          Math.random() * 0.5 + 0.5,
+          1
+        ),
+        life: 1.0
+      };
+      temp.push(particle);
+    }
+    return temp;
+  }, []);
+
+  useFrame((_, delta) => {
+    if (!particlesRef.current || !isMoving) return;
+
+    particles.forEach((particle, i) => {
+      if (particle.life <= 0) {
+        // Reset particle
+        particle.position.copy(position);
+        particle.velocity.set(
+          (Math.random() - 0.5) * 0.02,
+          Math.random() * 0.02,
+          (Math.random() - 0.5) * 0.02
+        );
+        particle.life = 1.0;
+      } else {
+        // Update particle
+        particle.position.add(particle.velocity);
+        particle.life -= delta * 2;
+      }
+    });
+
+    // Update geometry
+    const positions = new Float32Array(particles.length * 3);
+    const colors = new Float32Array(particles.length * 3);
+    const sizes = new Float32Array(particles.length);
+
+    particles.forEach((particle, i) => {
+      positions[i * 3] = particle.position.x;
+      positions[i * 3 + 1] = particle.position.y;
+      positions[i * 3 + 2] = particle.position.z;
+
+      colors[i * 3] = particle.color.r;
+      colors[i * 3 + 1] = particle.color.g;
+      colors[i * 3 + 2] = particle.color.b;
+
+      sizes[i] = particle.size * particle.life;
+    });
+
+    particlesRef.current.geometry.setAttribute(
+      "position",
+      new THREE.BufferAttribute(positions, 3)
+    );
+    particlesRef.current.geometry.setAttribute(
+      "color",
+      new THREE.BufferAttribute(colors, 3)
+    );
+    particlesRef.current.geometry.setAttribute(
+      "size",
+      new THREE.BufferAttribute(sizes, 1)
+    );
+  });
+
+  return (
+    <points ref={particlesRef}>
+      <bufferGeometry>
+        <bufferAttribute
+          attach="attributes-position"
+          count={particles.length}
+          array={new Float32Array(particles.length * 3)}
+          itemSize={3}
+        />
+        <bufferAttribute
+          attach="attributes-color"
+          count={particles.length}
+          array={new Float32Array(particles.length * 3)}
+          itemSize={3}
+        />
+        <bufferAttribute
+          attach="attributes-size"
+          count={particles.length}
+          array={new Float32Array(particles.length)}
+          itemSize={1}
+        />
+      </bufferGeometry>
+      <pointsMaterial
+        size={0.1}
+        vertexColors
+        transparent
+        opacity={0.6}
+        blending={THREE.AdditiveBlending}
+        depthWrite={false}
+      />
+    </points>
+  );
+}
+
 export default function Scene({ 
   hasEnteredNeighborhood, 
   setHasEnteredNeighborhood, 
@@ -371,9 +482,10 @@ export default function Scene({
         }
       }
     }, [isLoading, hasEnteredNeighborhood]);
-    
+
     return (
       <>
+        <CameraController />
         <ambientLight color={0xf4ccff} intensity={1.2} />
         <directionalLight position={[5, 5, 5]} intensity={1.1} />
         <pointLight position={[-5, 5, -5]} intensity={0.5} />
@@ -392,10 +504,16 @@ export default function Scene({
         />
 
         {hasEnteredNeighborhood && !isLoading && (
-          <OtherPlayers 
-            players={otherPlayers} 
-            key={otherPlayers.size}
-          />
+          <>
+            <OtherPlayers 
+              players={otherPlayers} 
+              key={otherPlayers.size}
+            />
+            <MagicParticles 
+              position={containerRef.current?.position || new THREE.Vector3()}
+              isMoving={memoizedMoveState.w || memoizedMoveState.a || memoizedMoveState.s || memoizedMoveState.d}
+            />
+          </>
         )}
         
         <Effects isLoading={isLoading} fadeTimeRef={fadeTimeRef} />
